@@ -621,7 +621,6 @@ java -Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram} -jar $GATK_JAR \\
         )
     )
 
-
 def split_n_cigar_reads(input, output, intervals=[], exclude_intervals=[], interval_list=None):
     if interval_list:
         inputs = [input]
