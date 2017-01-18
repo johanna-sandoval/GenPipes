@@ -40,6 +40,7 @@ import utils.utils
 
 from bfx import bedtools
 from bfx import bwa
+from bfx import gatk
 from bfx import cufflinks   
 from bfx import stringtie
 from bfx import ballgown
