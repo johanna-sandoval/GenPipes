@@ -640,6 +640,7 @@ java -Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram} -jar $GATK_JAR \\
   --reference_sequence {reference_sequence} \\
   --input_file {input} \\
   --out {output}{intervals}{exclude_intervals}""".format(
+<<<<<<< HEAD
             tmp_dir=config.param('gatk_split_N_trim', 'tmp_dir'),
             java_other_options=config.param('gatk_split_N_trim', 'java_other_options'),
             ram=config.param('gatk_split_N_trim', 'ram'),
@@ -650,6 +651,17 @@ java -Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram} -jar $GATK_JAR \\
             intervals="".join(" \\\n  --intervals " + interval for interval in intervals),
             interval_list=" \\\n --interval-padding 100 --intervals " + interval_list if interval_list else "",
             exclude_intervals="".join(" \\\n  --excludeIntervals " + exclude_interval for exclude_interval in exclude_intervals)
+=======
+        tmp_dir=config.param('gatk_split_N_trim', 'tmp_dir'),
+        java_other_options=config.param('gatk_split_N_trim', 'java_other_options'),
+        ram=config.param('gatk_split_N_trim', 'ram'),
+        other_options=config.param('gatk_split_N_trim', 'other_options',required=False),
+        reference_sequence=config.param('gatk_split_N_trim', 'reference', type='filepath'),
+        input=input,
+        output=output,
+        intervals="".join(" \\\n  --intervals " + interval for interval in intervals),
+        exclude_intervals="".join(" \\\n  --excludeIntervals " + exclude_interval for exclude_interval in exclude_intervals)
+>>>>>>> 7044fc6c (Updates and bug fixes)
         )
     )
 

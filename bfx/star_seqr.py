@@ -29,6 +29,7 @@ from core.job import *
 
 log = logging.getLogger(__name__)
 
+<<<<<<< HEAD
 def run(fastqs1, fastqs2, output_dir):
     if not isinstance(fastqs1, list):
         fastqs1 = [fastqs1]
@@ -40,6 +41,12 @@ def run(fastqs1, fastqs2, output_dir):
     return Job(
         fastqs1,
         [output_file],
+=======
+def run(fastq1, fastq2, output_dir):
+    return Job(
+        [fastq1, fastq2],
+        output_dir,
+>>>>>>> 7044fc6c (Updates and bug fixes)
         [
             ['run_star_seqr', 'module_conda']
         ],
@@ -57,8 +64,13 @@ def run(fastqs1, fastqs2, output_dir):
             reference=config.param('run_star_seqr', 'reference'),
             threads=config.param('run_star_seqr', 'threads', type='posint'),
             options=config.param('run_star_seqr', 'options'),
+<<<<<<< HEAD
             fastq1=",".join(fastq1 for fastq1 in fastqs1),
             fastq2=",".join(fastq2 for fastq2 in fastqs2),
+=======
+            fastq1=fastq1,
+            fastq2=fastq2,
+>>>>>>> 7044fc6c (Updates and bug fixes)
             output_dir=output_dir,
         ),
     )
