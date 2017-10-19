@@ -36,6 +36,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 # MUGQIC Modules
 from core.config import config, _raise, SanitycheckError
 from core.job import Job, concat_jobs, pipe_jobs
+from pipelines import common
+from bfx.sequence_dictionary import parse_sequence_dictionary_file, split_by_size
 import utils.utils
 
 from bfx import bedtools
@@ -48,13 +50,19 @@ from bfx import differential_expression
 from bfx import gq_seq_utils
 from bfx import htseq
 from bfx import metrics
+from bfx import fastqc
 from bfx import picard
 from bfx import samtools
-from bfx import star
 from bfx import bvatools
 from bfx import rmarkdown
 from bfx import tools
 from bfx import ucsc
+from bfx import gatk
+from bfx import sambamba
+from bfx import skewer
+from bfx import star_fusion
+from bfx import star_seqr
+from bfx import star
 
 from pipelines import common
 import utils
@@ -111,6 +119,90 @@ class RnaSeqRaw(common.Illumina):
 
         return int(min(14, math.log2(sum([int(chromosome[1]) for chromosome in genome_index])) / 2 - 1))
 
+    @property
+    def sequence_dictionary(self):
+        if not hasattr(self, "_sequence_dictionary"):
+            self._sequence_dictionary = parse_sequence_dictionary_file(config.param('DEFAULT', 'genome_dictionary', type='filepath'), variant=False)
+        return self._sequence_dictionary
+
+    def build_adapter_file(self, directory, readset):
+        adapter_file = os.path.join(directory, "adapter.tsv")
+        if readset.run_type == "SINGLE_END":
+            if readset.adapter1:
+                adapter_job = Job(
+                    command="""\
+`cat > {adapter_file} << END
+>Adapter\n{sequence}\n
+END
+`""".format(
+                        adapter_file=adapter_file,
+                        sequence=readset.adapter1
+                    )
+                )
+            else:
+                raise Exception("Error: missing adapter1 for SINGLE_END readset \"" + readset.name + "\", or missing adapter_file parameter in config file!")
+
+        elif readset.run_type == "PAIRED_END":
+            if readset.adapter1 and readset.adapter2:
+                adapter_job = Job(
+                    command="""\
+`cat > {adapter_file} << END
+>Adapter1\n{sequence1}\n
+>Adapter2\n{sequence2}\n
+END
+`""".format(
+                        adapter_file=adapter_file,
+                        sequence1=readset.adapter1,
+                        sequence2=readset.adapter2,
+                    )
+                )
+
+        return adapter_job
+
+
+    def skewer_trimming(self):
+        """
+        """
+
+        jobs = []
+
+        for readset in self.readsets:
+            output_dir = os.path.join("trim", readset.sample.name)
+            trim_file_prefix = os.path.join(output_dir, readset.name)
+
+            adapter_file = config.param('skewer_trimming', 'adapter_file', required=False, type='filepath')
+            adapter_job = None
+
+            if not adapter_file:
+                adapter_job = self.build_adapter_file(output_dir, readset)
+                adapter_file = os.path.join(output_dir, "adapter.tsv")
+
+            if readset.run_type == "PAIRED_END":
+                candidate_input_files = [[trim_file_prefix + "pair1.fastq.gz", trim_file_prefix + "pair2.fastq.gz"]]
+                if readset.fastq1 and readset.fastq2:
+                    candidate_input_files.append([readset.fastq1, readset.fastq2])
+                if readset.bam:
+                    candidate_input_files.append([re.sub("\.bam$", ".pair1.fastq.gz", readset.bam), re.sub("\.bam$", ".pair2.fastq.gz", readset.bam)])
+                [fastq1, fastq2] = self.select_input_files(candidate_input_files)
+            elif readset.run_type == "SINGLE_END":
+                if readset.fastq1:
+                    candidate_input_files.append([readset.fastq1])
+                if readset.bam:
+                    candidate_input_files.append([re.sub("\.bam$", ".single.fastq.gz", readset.bam)])
+                [fastq1] = self.select_input_files(candidate_input_files)
+                fastq2 = None
+            else:
+                raise Exception("Error: run type \"" + readset.run_type +
+                "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!")
+
+            jobs.append(concat_jobs([
+                Job(command="mkdir -p " + output_dir),
+                adapter_job,
+                skewer.trim(fastq1, fastq2, trim_file_prefix, adapter_file)
+            ],name="skewer_trimming." + readset.name))
+
+        return jobs
+
     def star(self):
         """
         The filtered reads are aligned to a reference genome. The alignment is done per readset of sequencing
@@ -131,7 +223,8 @@ class RnaSeqRaw(common.Illumina):
         ######
         #pass 1 -alignment
         for readset in self.readsets:
-            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + ".trim.")
+            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + "-trimmed-")
+            #trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + ".trim.")
             alignment_1stPass_directory = os.path.join("alignment_1stPass", readset.sample.name, readset.name)
             individual_junction_list.append(os.path.join(alignment_1stPass_directory,"SJ.out.tab"))
 
@@ -191,7 +284,7 @@ class RnaSeqRaw(common.Illumina):
         ######
         #Pass 2 - alignment
         for readset in self.readsets:
-            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + ".trim.")
+            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + "-trimmed-")
             alignment_2ndPass_directory = os.path.join("alignment", readset.sample.name, readset.name)
 
             if readset.run_type == "PAIRED_END":
@@ -276,6 +369,27 @@ pandoc --to=markdown \\
 
         return jobs
 
+
+    def sambamba_merge_sam_files(self):
+        """
+        BAM readset files are merged into one file per sample. Merge is done using [Sambamba] (http://lomereiter.github.io/sambamba/docs/sambamba-merge.html).
+        """
+
+        jobs = []
+        for sample in self.samples:
+            # Skip samples with one readset only, since symlink has been created at align step
+            if len(sample.readsets) > 1:
+                alignment_directory = os.path.join("alignment", sample.name)
+                inputs = [os.path.join(alignment_directory, readset.name, "Aligned.sortedByCoord.out.bam") for readset in sample.readsets]
+                output = os.path.join(alignment_directory, sample.name + ".sorted.bam")
+
+                job = sambamba.merge(inputs, output)
+                job.name = "sambamba_merge_sam_files." + sample.name
+                jobs.append(job)
+
+        return jobs
+
+
     def picard_merge_sam_files(self):
         """
         BAM readset files are merged into one file per sample. Merge is done using [Picard](http://broadinstitute.github.io/picard/).
@@ -293,17 +407,18 @@ pandoc --to=markdown \\
                 job.name = "picard_merge_sam_files." + sample.name
                 job.samples = [sample]
                 jobs.append(job)
+
         return jobs
 
     def picard_sort_sam(self):
         """
         The alignment file is reordered (QueryName) using [Picard](http://broadinstitute.github.io/picard/). The QueryName-sorted bam files will be used to determine raw read counts.
         """
-
+    
         jobs = []
         for sample in self.samples:
             alignment_file_prefix = os.path.join("alignment", sample.name, sample.name)
-
+        
             job = picard.sort_sam(
                 alignment_file_prefix + ".sorted.bam",
                 alignment_file_prefix + ".QueryNameSorted.bam",
@@ -314,33 +429,115 @@ pandoc --to=markdown \\
             jobs.append(job)
         return jobs
 
-    def picard_mark_duplicates(self):
+    def sambamba_sort_sam(self):
         """
-        Mark duplicates. Aligned reads per sample are duplicates if they have the same 5' alignment positions
-        (for both mates in the case of paired-end reads). All but the best pair (based on alignment score)
-        will be marked as a duplicate in the BAM file. Marking duplicates is done using [Picard](http://broadinstitute.github.io/picard/).
+        The alignment file is reordered (QueryName) using [Sambamba](http://lomereiter.github.io/sambamba/docs/sambamba-sort.html). The QueryName-sorted bam files will be used to determine raw read counts.
         """
 
         jobs = []
         for sample in self.samples:
-            alignment_file_prefix = os.path.join("alignment", sample.name, sample.name + ".sorted.")
+            alignment_file_prefix = os.path.join("alignment", sample.name, sample.name)
 
-            job = picard.mark_duplicates(
-                [alignment_file_prefix + "bam"],
-                alignment_file_prefix + "mdup.bam",
-                alignment_file_prefix + "mdup.metrics"
+            job = sambamba.sort(
+                alignment_file_prefix + ".sorted.bam",
+                alignment_file_prefix + ".qsorted.bam",
+                os.path.join("alignment", sample.name),
             )
-            job.name = "picard_mark_duplicates." + sample.name
-            job.samples = [sample]
+            job.name = "sambamba_sort_sam." + sample.name
             jobs.append(job)
+
         return jobs
 
-    def bam_hard_clip(self):
+    def picard_mark_duplicates(self):
         """
-        Generate a hardclipped version of the bam for the toxedo suite which doesn't support this official sam feature.
+        Mark duplicates. Aligned reads per sample are duplicates if they have the same 5' alignment positions
+        (for both mates in the case of paired-end reads). All but the best pair (based on alignment score)
+        ill be marked as a duplicate in the BAM file. Marking duplicates is done using [Picard](http://broadinstitute.github.io/picard/).
         """
 
         jobs = []
+        for sample in self.samples:
+            alignment_file_prefix = os.path.join("alignment", sample.name, sample.name + ".")
+            input = alignment_file_prefix + "sorted.bam"
+            output = alignment_file_prefix + "sorted.dup.bam"
+            metrics_file = alignment_file_prefix + "sorted.dup.metrics"
+
+            job = picard.mark_duplicates([input], output, metrics_file)
+            job.name = "picard_mark_duplicates." + sample.name
+            job.samples = [sample]
+            jobs.append(job)
+
+            report_file = os.path.join("report", "DnaSeq.picard_mark_duplicates.md")
+            jobs.append(
+                Job(
+                    [os.path.join("alignment", sample.name, sample.name + ".sorted.dup.bam") for sample in self.samples],
+                    [report_file],
+                    command="""\
+    mkdir -p report && \\
+    cp \\
+      {report_template_dir}/{basename_report_file} \\
+      {report_file}""".format(
+                        report_template_dir=self.report_template_dir,
+                        basename_report_file=os.path.basename(report_file),
+                        report_file=report_file
+                    ),
+                    report_files=[report_file],
+                    name="picard_mark_duplicates_report")
+            )
+
+        return jobs
+
+    def metrics_rna_fastqc(self):
+
+        jobs = []
+        for sample in self.samples:
+            fastqc_directory = os.path.join("metrics", "rna", sample.name, "fastqc")
+            input = os.path.join("alignment", sample.name, sample.name + ".sorted.dup.bam")
+            output_dir = os.path.join(fastqc_directory)
+            output = os.path.join(fastqc_directory, sample.name + ".sorted.dup_fastqc.zip")
+
+            mkdir_job = Job(command="mkdir -p " + output_dir, removable_files=[output_dir])
+
+            adapter_file = config.param('fastqc', 'adapter_file', required=False, type='filepath')
+            adapter_job = None
+
+            if not adapter_file:
+                adapter_job = self.build_adapter_file(output_dir, sample.readsets[0])
+                adapter_file = os.path.join(output_dir, "adapter.tsv")
+
+            jobs.append(concat_jobs([
+                mkdir_job,
+                adapter_job,
+                fastqc.fastqc(input, None, output_dir, output, adapter_file),
+            ], name="fastqc." + sample.name))
+
+        return jobs
+
+    def picard_rna_metrics(self):
+        """
+        Computes a series of quality control metrics using both CollectRnaSeqMetrics and CollectAlignmentSummaryMetrics functions
+        metrics are collected using [Picard](http://broadinstitute.github.io/picard/).
+        """
+
+        jobs = []
+        reference_file = config.param('picard_rna_metrics', 'genome_fasta', type='filepath')
+        for sample in self.samples:
+            alignment_file = os.path.join("alignment", sample.name, sample.name + ".sorted.dup.split.realigned.recal.bam")
+            output_directory = os.path.join("metrics", sample.name)
+
+            job = concat_jobs([
+                Job(command="mkdir -p " + output_directory, removable_files=[output_directory]),
+                    picard.collect_multiple_metrics(alignment_file, os.path.join(output_directory, sample.name), reference_file),
+                    picard.collect_rna_metrics(alignment_file, os.path.join(output_directory, sample.name + ".picard_rna_metrics"))
+                ], name="picard_rna_metrics." + sample.name)
+
+            jobs.append(job)
+
+        return jobs
+
+    def bam_hard_clip(self):
+        jobs = []
+        
         for sample in self.samples:
             alignment_input = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam")
             alignment_output = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.hardClip.bam")
@@ -355,7 +552,7 @@ pandoc --to=markdown \\
                     [alignment_output],
                     # awk to transform soft clip into hard clip for tuxedo suite
                     command="""\
-awk 'BEGIN {{OFS="\\t"}} {{if (substr($1,1,1)=="@") {{print;next}}; split($6,C,/[0-9]*/); split($6,L,/[SMDIN]/); if (C[2]=="S") {{$10=substr($10,L[1]+1); $11=substr($11,L[1]+1)}}; if (C[length(C)]=="S") {{L1=length($10)-L[length(L)-1]; $10=substr($10,1,L1); $11=substr($11,1,L1); }}; gsub(/[0-9]*S/,"",$6); print}}' """.format()
+                    awk 'BEGIN {{OFS="\\t"}} {{if (substr($1,1,1)=="@") {{print;next}}; split($6,C,/[0-9]*/); split($6,L,/[SMDIN]/); if (C[2]=="S") {{$10=substr($10,L[1]+1); $11=substr($11,L[1]+1)}}; if (C[length(C)]=="S") {{L1=length($10)-L[length(L)-1]; $10=substr($10,1,L1); $11=substr($11,1,L1); }}; gsub(/[0-9]*S/,"",$6); print}}' """.format()
                 ),
                 samtools.view(
                     "-",
@@ -366,13 +563,88 @@ awk 'BEGIN {{OFS="\\t"}} {{if (substr($1,1,1)=="@") {{print;next}}; split($6,C,/
             job.name="tuxedo_hard_clip."+ sample.name
             job.samples = [sample]
             jobs.append(job)
+        
         return jobs
+
+    def split_N_trim(self):
+        """
+        SplitNtrim. A [GATK](https://software.broadinstitute.org/gatk/) tool called SplitNCigarReads developed specially for RNAseq, which splits reads into exon segments (getting rid of Ns but maintaining grouping information) and hard-clip any sequences overhanging into the intronic regions.
+        """
+      
+        jobs = []
+
+        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', type='posint')
+        if nb_jobs > 50:
+            log.warning("Number of haplotype jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
+
+        for sample in self.samples:
+            alignment_dir = os.path.join("alignment", sample.name)
+            split_dir = os.path.join(alignment_dir, "splitNtrim")
+            split_file_prefix = os.path.join(split_dir, sample.name + ".")
+            alignment_file_prefix = os.path.join(alignment_dir, sample.name + ".")
+
+            if nb_jobs == 1:
+                jobs.append(concat_jobs([
+                    Job(command="mkdir -p " + alignment_dir),
+                    gatk.split_n_cigar_reads(alignment_file_prefix + "sorted.dup.bam", split_file_prefix + "sorted.dup.split.bam"),
+                ],name = "gatk_split_N_trim." + sample.name))
+
+
+            else:
+                unique_sequences_per_job,unique_sequences_per_job_others = split_by_size(self.sequence_dictionary, nb_jobs - 1)    
+
+                # Create one separate job for each of the first sequences
+                for idx,sequences in enumerate(unique_sequences_per_job):
+                    jobs.append(concat_jobs([
+                    # Create output directory since it is not done by default by GATK tools
+                        Job(command="mkdir -p " + split_dir),
+                        gatk.split_n_cigar_reads(alignment_file_prefix + "sorted.dup.bam", split_file_prefix + "sorted.dup.split." + str(idx) + ".bam", intervals=sequences)
+                    ], name="gatk_split_N_trim." + sample.name + "." + str(idx)))
+        
+                jobs.append(concat_jobs([
+                    Job(command="mkdir -p " + alignment_dir),
+                        gatk.split_n_cigar_reads(alignment_file_prefix + "sorted.dup.bam", split_file_prefix + "sorted.dup.split.others.bam", exclude_intervals=unique_sequences_per_job_others)
+                    ], name="gatk_split_N_trim." + sample.name + ".others"))
+    
+        return jobs
+    
+
+    def sambamba_merge_splitNtrim_files(self):
+        """
+        BAM readset files are merged into one file per sample. Merge is done using [Sambamba] (http://lomereiter.github.io/sambamba/docs/sambamba-merge.html).
+        """
+
+        jobs = []
+
+        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', type='posint')
+        if nb_jobs > 50:
+            log.warning("Number of haplotype jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
+
+        for sample in self.samples:
+            alignment_directory = os.path.join("alignment", sample.name)
+            split_file_prefix = os.path.join(alignment_directory, "splitNtrim", sample.name + ".")
+            output = os.path.join(alignment_directory, sample.name + ".sorted.dup.split.bam")
+
+            if nb_jobs > 1:
+                unique_sequences_per_job,unique_sequences_per_job_others = split_by_size(self.sequence_dictionary, nb_jobs - 1)
+
+                inputs = []
+                for idx,sequences in enumerate(unique_sequences_per_job):
+                    inputs.append(os.path.join(split_file_prefix + "sorted.dup.split." + str(idx) + ".bam"))
+                inputs.append(os.path.join(split_file_prefix + "sorted.dup.split.others.bam"))
+
+                job = sambamba.merge(inputs, output)
+                job.name = "sambamba_merge_splitNtrim_files." + sample.name
+                jobs.append(job)
+
+        return jobs
+
 
     def rnaseqc(self):
         """
         Computes a series of quality control metrics using [RNA-SeQC](https://www.broadinstitute.org/cancer/cga/rna-seqc).
         """
-
+        
         jobs = []
         sample_file = os.path.join("alignment", "rnaseqc.samples.txt")
         sample_rows = [[sample.name, os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam"), "RNAseq"] for sample in self.samples]
@@ -384,11 +656,15 @@ awk 'BEGIN {{OFS="\\t"}} {{if (substr($1,1,1)=="@") {{print;next}}; split($6,C,/
         jobs.append(concat_jobs([
             Job(command="mkdir -p " + output_directory, removable_files=[output_directory], samples=self.samples),
             Job(input_bams, [sample_file], command="""\
-echo "Sample\tBamFile\tNote
-{sample_rows}" \\
-  > {sample_file}""".format(sample_rows="\n".join(["\t".join(sample_row) for sample_row in sample_rows]), sample_file=sample_file)),
-            metrics.rnaseqc(sample_file, output_directory, self.run_type == "SINGLE_END", gtf_file=gtf_transcript_id, reference=config.param('rnaseqc', 'genome_fasta', param_type='filepath'), ribosomal_interval_file=config.param('rnaseqc', 'ribosomal_fasta', param_type='filepath')),
-            Job([], [output_directory + ".zip"], command="zip -r {output_directory}.zip {output_directory}".format(output_directory=output_directory))
+        echo "Sample\tBamFile\tNote
+        {sample_rows}" \\
+          > {sample_file}""".format(sample_rows="\n".join(["\t".join(sample_row) for sample_row in sample_rows]),
+                                    sample_file=sample_file)),
+            metrics.rnaseqc(sample_file, output_directory, self.run_type == "SINGLE_END", gtf_file=gtf_transcript_id,
+                            reference=config.param('rnaseqc', 'genome_fasta', type='filepath'),
+                            ribosomal_interval_file=config.param('rnaseqc', 'ribosomal_fasta', type='filepath')),
+            Job([], [output_directory + ".zip"],
+                command="zip -r {output_directory}.zip {output_directory}".format(output_directory=output_directory))
         ], name="rnaseqc"))
 
         trim_metrics_file = os.path.join("metrics", "trimSampleTable.tsv")
@@ -402,38 +678,38 @@ echo "Sample\tBamFile\tNote
                 [['rnaseqc', 'module_python'], ['rnaseqc', 'module_pandoc']],
                 # Ugly awk to merge sample metrics with trim metrics if they exist; knitr may do this better
                 command="""\
-mkdir -p report && \\
-cp {output_directory}.zip report/reportRNAseqQC.zip && \\
-python -c 'import csv; csv_in = csv.DictReader(open("{metrics_file}"), delimiter="\t")
-print "\t".join(["Sample", "Aligned Reads", "Alternative Alignments", "%", "rRNA Reads", "Coverage", "Exonic Rate", "Genes"])
-print "\\n".join(["\t".join([
-    line["Sample"],
-    line["Mapped"],
-    line["Alternative Aligments"],
-    str(float(line["Alternative Aligments"]) / float(line["Mapped"]) * 100),
-    line["rRNA"],
-    line["Mean Per Base Cov."],
-    line["Exonic Rate"],
-    line["Genes Detected"]
-]) for line in csv_in])' \\
-  > {report_metrics_file}.tmp && \\
-if [[ -f {trim_metrics_file} ]]
-then
-  awk -F"\t" 'FNR==NR{{raw_reads[$1]=$2; surviving_reads[$1]=$3; surviving_pct[$1]=$4; next}}{{OFS="\t"; if ($2=="Aligned Reads"){{surviving_pct[$1]="%"; aligned_pct="%"; rrna_pct="%"}} else {{aligned_pct=($2 / surviving_reads[$1] * 100); rrna_pct=($5 / surviving_reads[$1] * 100)}}; printf $1"\t"raw_reads[$1]"\t"surviving_reads[$1]"\t"surviving_pct[$1]"\t"$2"\t"aligned_pct"\t"$3"\t"$4"\t"$5"\t"rrna_pct; for (i = 6; i<= NF; i++) {{printf "\t"$i}}; print ""}}' \\
-  {trim_metrics_file} \\
-  {report_metrics_file}.tmp \\
-  > {report_metrics_file}
-else
-  cp {report_metrics_file}.tmp {report_metrics_file}
-fi && \\
-rm {report_metrics_file}.tmp && \\
-trim_alignment_table_md=`if [[ -f {trim_metrics_file} ]] ; then cut -f1-13 {report_metrics_file} | LC_NUMERIC=en_CA awk -F "\t" '{{OFS="|"; if (NR == 1) {{$1 = $1; print $0; print "-----|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:"}} else {{print $1, sprintf("%\\47d", $2), sprintf("%\\47d", $3), sprintf("%.1f", $4), sprintf("%\\47d", $5), sprintf("%.1f", $6), sprintf("%\\47d", $7), sprintf("%.1f", $8), sprintf("%\\47d", $9), sprintf("%.1f", $10), sprintf("%.2f", $11), sprintf("%.2f", $12), sprintf("%\\47d", $13)}}}}' ; else cat {report_metrics_file} | LC_NUMERIC=en_CA awk -F "\t" '{{OFS="|"; if (NR == 1) {{$1 = $1; print $0; print "-----|-----:|-----:|-----:|-----:|-----:|-----:|-----:"}} else {{print $1, sprintf("%\\47d", $2), sprintf("%\\47d", $3), sprintf("%.1f", $4), sprintf("%\\47d", $5), sprintf("%.2f", $6), sprintf("%.2f", $7), $8}}}}' ; fi`
-pandoc \\
-  {report_template_dir}/{basename_report_file} \\
-  --template {report_template_dir}/{basename_report_file} \\
-  --variable trim_alignment_table="$trim_alignment_table_md" \\
-  --to markdown \\
-  > {report_file}""".format(
+        mkdir -p report && \\
+        cp {output_directory}.zip report/reportRNAseqQC.zip && \\
+        python -c 'import csv; csv_in = csv.DictReader(open("{metrics_file}"), delimiter="\t")
+        print "\t".join(["Sample", "Aligned Reads", "Alternative Alignments", "%", "rRNA Reads", "Coverage", "Exonic Rate", "Genes"])
+        print "\\n".join(["\t".join([
+            line["Sample"],
+            line["Mapped"],
+            line["Alternative Aligments"],
+            str(float(line["Alternative Aligments"]) / float(line["Mapped"]) * 100),
+            line["rRNA"],
+            line["Mean Per Base Cov."],
+            line["Exonic Rate"],
+            line["Genes Detected"]
+        ]) for line in csv_in])' \\
+          > {report_metrics_file}.tmp && \\
+        if [[ -f {trim_metrics_file} ]]
+        then
+          awk -F"\t" 'FNR==NR{{raw_reads[$1]=$2; surviving_reads[$1]=$3; surviving_pct[$1]=$4; next}}{{OFS="\t"; if ($2=="Aligned Reads"){{surviving_pct[$1]="%"; aligned_pct="%"; rrna_pct="%"}} else {{aligned_pct=($2 / surviving_reads[$1] * 100); rrna_pct=($5 / surviving_reads[$1] * 100)}}; printf $1"\t"raw_reads[$1]"\t"surviving_reads[$1]"\t"surviving_pct[$1]"\t"$2"\t"aligned_pct"\t"$3"\t"$4"\t"$5"\t"rrna_pct; for (i = 6; i<= NF; i++) {{printf "\t"$i}}; print ""}}' \\
+          {trim_metrics_file} \\
+          {report_metrics_file}.tmp \\
+          > {report_metrics_file}
+        else
+          cp {report_metrics_file}.tmp {report_metrics_file}
+        fi && \\
+        rm {report_metrics_file}.tmp && \\
+        trim_alignment_table_md=`if [[ -f {trim_metrics_file} ]] ; then cut -f1-13 {report_metrics_file} | LC_NUMERIC=en_CA awk -F "\t" '{{OFS="|"; if (NR == 1) {{$1 = $1; print $0; print "-----|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:"}} else {{print $1, sprintf("%\\47d", $2), sprintf("%\\47d", $3), sprintf("%.1f", $4), sprintf("%\\47d", $5), sprintf("%.1f", $6), sprintf("%\\47d", $7), sprintf("%.1f", $8), sprintf("%\\47d", $9), sprintf("%.1f", $10), sprintf("%.2f", $11), sprintf("%.2f", $12), sprintf("%\\47d", $13)}}}}' ; else cat {report_metrics_file} | LC_NUMERIC=en_CA awk -F "\t" '{{OFS="|"; if (NR == 1) {{$1 = $1; print $0; print "-----|-----:|-----:|-----:|-----:|-----:|-----:|-----:"}} else {{print $1, sprintf("%\\47d", $2), sprintf("%\\47d", $3), sprintf("%.1f", $4), sprintf("%\\47d", $5), sprintf("%.2f", $6), sprintf("%.2f", $7), $8}}}}' ; fi`
+        pandoc \\
+          {report_template_dir}/{basename_report_file} \\
+          --template {report_template_dir}/{basename_report_file} \\
+          --variable trim_alignment_table="$trim_alignment_table_md" \\
+          --to markdown \\
+          > {report_file}""".format(
                     output_directory=output_directory,
                     report_template_dir=self.report_template_dir,
                     trim_metrics_file=trim_metrics_file,
@@ -450,24 +726,233 @@ pandoc \\
 
         return jobs
 
-    def picard_rna_metrics(self):
+    def gatk_indel_realigner(self):
         """
-        Computes a series of quality control metrics using both CollectRnaSeqMetrics and CollectAlignmentSummaryMetrics functions
-        metrics are collected using [Picard](http://broadinstitute.github.io/picard/).
+        Insertion and deletion realignment is performed on regions where multiple base mismatches
+        are preferred over indels by the aligner since it can appear to be less costly by the algorithm.
+        Such regions will introduce false positive variant calls which may be filtered out by realigning
+        those regions properly. Realignment is done using [GATK](https://www.broadinstitute.org/gatk/).
+        The reference genome is divided by a number regions given by the `nb_jobs` parameter.
         """
 
         jobs = []
-        reference_file = config.param('picard_rna_metrics', 'genome_fasta', param_type='filepath')
-        for sample in self.samples:
-                alignment_file = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam")
-                output_directory = os.path.join("metrics", sample.name)
 
-                job = concat_jobs([
-                    Job(command="mkdir -p " + output_directory, removable_files=[output_directory], samples=[sample]),
-                    picard.collect_multiple_metrics(alignment_file, os.path.join(output_directory, sample.name), reference_file, library_type=sample.readsets[0].run_type),
-                    picard.collect_rna_metrics(alignment_file, os.path.join(output_directory, sample.name+".picard_rna_metrics"))
-                ],name="picard_rna_metrics."+ sample.name)
+        nb_jobs = config.param('gatk_indel_realigner', 'nb_jobs', type='posint')
+        if nb_jobs > 50:
+            log.warning("Number of realign jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
+
+        for sample in self.samples:
+            alignment_directory = os.path.join("alignment", sample.name)
+            realign_directory = os.path.join(alignment_directory, "realign")
+            #input = os.path.join(alignment_directory, sample.name + ".sorted.dup.split.bam")
+            input = os.path.join(alignment_directory, sample.name + ".keep.merged.dup.sorted.bam")
+
+            if nb_jobs == 1:
+                realign_prefix = os.path.join(realign_directory, "all")
+                realign_intervals = realign_prefix + ".intervals"
+                output_bam = realign_prefix + ".bam"
+                sample_output_bam = os.path.join(alignment_directory, sample.name + ".sorted.dup.split.realigned.bam")
+                jobs.append(concat_jobs([
+                    Job(command="mkdir -p " + realign_directory, removable_files=[realign_directory]),
+                    gatk.realigner_target_creator(input, realign_intervals),
+                    gatk.indel_realigner(input, output=output_bam, target_intervals=realign_intervals),
+                    # Create sample realign symlink since no merging is required
+                    Job([output_bam], [sample_output_bam], command="ln -s -f " + os.path.relpath(output_bam, os.path.dirname(sample_output_bam)) + " " + sample_output_bam)
+                ], name="gatk_indel_realigner." + sample.name))
+
+            else:
+                # The first sequences are the longest to process.
+                # Each of them must be processed in a separate job.
+                unique_sequences_per_job,unique_sequences_per_job_others = split_by_size(self.sequence_dictionary, nb_jobs - 1)
+
+                # Create one separate job for each of the first sequences
+                for idx,sequence in enumerate(unique_sequences_per_job):
+                    realign_prefix = os.path.join(realign_directory, str(idx))
+                    realign_intervals = realign_prefix + ".intervals"
+                    intervals=sequence
+                    if str(idx) == 0:
+                        intervals.append("unmapped")
+                    output_bam = realign_prefix + ".bam"
+                    jobs.append(concat_jobs([
+                        # Create output directory since it is not done by default by GATK tools
+                        Job(command="mkdir -p " + realign_directory, removable_files=[realign_directory]),
+                        gatk.realigner_target_creator(input, realign_intervals, intervals=intervals),
+                        gatk.indel_realigner(input, output=output_bam, target_intervals=realign_intervals, intervals=intervals)
+                    ], name="gatk_indel_realigner." + sample.name + "." + str(idx)))
+
+                # Create one last job to process the last remaining sequences and 'others' sequences
+                realign_prefix = os.path.join(realign_directory, "others")
+                realign_intervals = realign_prefix + ".intervals"
+                output_bam = realign_prefix + ".bam"
+                jobs.append(concat_jobs([
+                    # Create output directory since it is not done by default by GATK tools
+                    Job(command="mkdir -p " + realign_directory, removable_files=[realign_directory]),
+                    gatk.realigner_target_creator(input, realign_intervals, exclude_intervals=unique_sequences_per_job_others),
+                    gatk.indel_realigner(input, output=output_bam, target_intervals=realign_intervals, exclude_intervals=unique_sequences_per_job_others)
+                ], name="gatk_indel_realigner." + sample.name + ".others"))
+
+        return jobs
+
+    def sambamba_merge_realigned(self):
+        """
+        BAM files of regions of realigned reads are merged per sample using [Sambamba](http://lomereiter.github.io/sambamba/index.html).
+        """
+
+        jobs = []
+        nb_jobs = config.param('gatk_indel_realigner', 'nb_jobs', type='posint')
+
+        for sample in self.samples:
+            alignment_directory = os.path.join("alignment", sample.name)
+            realign_directory = os.path.join(alignment_directory, "realign")
+            merged_realigned_bam = os.path.join(alignment_directory, sample.name + ".sorted.dup.split.realigned.bam")
+
+            # if nb_jobs == 1, symlink has been created in indel_realigner and merging is not necessary
+            if nb_jobs > 1:
+                unique_sequences_per_job,unique_sequences_per_job_others = split_by_size(self.sequence_dictionary, nb_jobs - 1)
+
+                inputs = []
+                for idx,sequences in enumerate(unique_sequences_per_job):
+                    inputs.append(os.path.join(realign_directory, str(idx) + ".bam"))
+                inputs.append(os.path.join(realign_directory, "others.bam"))
+
+                job = sambamba.merge(inputs, merged_realigned_bam)
+                job.name = "sambamba_merge_realigned." + sample.name
                 jobs.append(job)
+
+        return jobs
+ 
+    def recalibration(self):
+        """
+        Recalibrate base quality scores of sequencing-by-synthesis reads in an aligned BAM file. After recalibration,
+        the quality scores in the QUAL field in each read in the output BAM are more accurate in that
+        the reported quality score is closer to its actual probability of mismatching the reference genome.
+        Moreover, the recalibration tool attempts to correct for variation in quality with machine cycle
+        and sequence context, and by doing so, provides not only more accurate quality scores but also
+        more widely dispersed ones.
+        """
+
+        jobs = []
+        
+        created_interval_lists = []        
+
+        for sample in self.samples:
+            file_prefix = os.path.join("alignment", sample.name, sample.name + ".sorted.dup.split.realigned.")
+            input = file_prefix + "bam"
+            print_reads_output = file_prefix + "recal.bam"
+            base_recalibrator_output = file_prefix + "recalibration_report.grp"
+
+            coverage_bed = bvatools.resolve_readset_coverage_bed(sample.readsets[0])
+            if coverage_bed:
+                interval_list = re.sub("\.[^.]+$", ".interval_list", coverage_bed)
+
+                if not interval_list in created_interval_lists:
+                    job = tools.bed2interval_list(None, coverage_bed, interval_list)
+                    job.name = "interval_list." + os.path.basename(coverage_bed)
+                    jobs.append(job)
+                    #created_interval_lists.append(interval_list)               
+
+                jobs.append(concat_jobs([
+                    gatk.base_recalibrator(input, base_recalibrator_output, intervals=interval_list),
+                    gatk.print_reads(input, print_reads_output, base_recalibrator_output),
+                    Job(input_files=[print_reads_output], output_files=[print_reads_output + ".md5"], command="md5sum " + print_reads_output + " > " + print_reads_output + ".md5")
+                ], name="recalibration." + sample.name))
+
+            else:
+
+                jobs.append(concat_jobs([
+                    gatk.base_recalibrator(input, base_recalibrator_output),
+                    gatk.print_reads(input, print_reads_output, base_recalibrator_output),
+                    Job(input_files=[print_reads_output], output_files=[print_reads_output + ".md5"], command="md5sum " + print_reads_output + " > " + print_reads_output + ".md5")
+                ], name="recalibration." + sample.name))
+
+        return jobs
+
+
+    def gatk_haplotype_caller(self):
+        """
+        GATK haplotype caller for snps and small indels.
+        """
+
+        jobs = []
+
+        nb_haplotype_jobs = config.param('gatk_haplotype_caller', 'nb_jobs', type='posint')
+        if nb_haplotype_jobs > 50:
+            log.warning("Number of haplotype jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
+
+        for sample in self.samples:
+            alignment_directory = os.path.join("alignment", sample.name)
+            haplotype_directory = os.path.join(alignment_directory, "rawHaplotypeCaller")
+            input = os.path.join(alignment_directory, sample.name + ".sorted.dup.split.realigned.recal.bam")
+
+            if nb_haplotype_jobs == 1:
+                jobs.append(concat_jobs([
+                    # Create output directory since it is not done by default by GATK tools
+                    Job(command="mkdir -p " + haplotype_directory,removable_files=[haplotype_directory]),
+                    gatk.haplotype_caller(input, os.path.join(haplotype_directory, sample.name + ".hc.vcf.gz"))
+                ], name="gatk_haplotype_caller." + sample.name))
+
+            else:
+                unique_sequences_per_job,unique_sequences_per_job_others = split_by_size(self.sequence_dictionary, nb_haplotype_jobs - 1)
+
+                # Create one separate job for each of the first sequences
+                for idx,sequences in enumerate(unique_sequences_per_job):
+                    jobs.append(concat_jobs([
+                        # Create output directory since it is not done by default by GATK tools
+                        Job(command="mkdir -p " + haplotype_directory,removable_files=[haplotype_directory]),
+                        gatk.haplotype_caller(input, os.path.join(haplotype_directory, sample.name + "." + str(idx) + ".hc.vcf.gz"), intervals=sequences)
+                    ], name="gatk_haplotype_caller." + sample.name + "." + str(idx)))
+
+                # Create one last job to process the last remaining sequences and 'others' sequences
+                jobs.append(concat_jobs([
+                    # Create output directory since it is not done by default by GATK tools
+                    Job(command="mkdir -p " + haplotype_directory,removable_files=[haplotype_directory]),
+                    gatk.haplotype_caller(input, os.path.join(haplotype_directory, sample.name + ".others.hc.vcf.gz"), exclude_intervals=unique_sequences_per_job_others)
+                ], name="gatk_haplotype_caller." + sample.name + ".others"))
+
+        return jobs
+
+    def merge_hc_vcf(self):
+        """
+        Merges the gvcfs of haplotype caller and also generates a per sample vcf containing genotypes.
+        """
+
+        jobs = []
+        nb_haplotype_jobs = config.param('gatk_haplotype_caller', 'nb_jobs', type='posint')
+
+        for sample in self.samples:
+            haplotype_file_prefix = os.path.join("alignment", sample.name, "rawHaplotypeCaller", sample.name)
+            output_haplotype_file_prefix = os.path.join("alignment", sample.name, sample.name)
+            if nb_haplotype_jobs == 1:
+                vcfs_to_merge = [haplotype_file_prefix + ".hc.vcf.gz"]
+            else:
+                unique_sequences_per_job,unique_sequences_per_job_others = split_by_size(self.sequence_dictionary, nb_haplotype_jobs - 1)
+
+                vcfs_to_merge = [haplotype_file_prefix + "." + str(idx) + ".hc.vcf.gz" for idx in xrange(len(unique_sequences_per_job))]
+                vcfs_to_merge.append(haplotype_file_prefix + ".others.hc.vcf.gz")
+
+            jobs.append(concat_jobs([
+                gatk.cat_variants(vcfs_to_merge, output_haplotype_file_prefix + ".hc.vcf.gz"),
+            ], name="merge_hc_vcf." + sample.name))
+
+        return jobs
+
+    def variant_filtration(self):
+        """
+        GATK VariantFiltration.
+        VariantFiltration is a GATK tool for hard-filtering variant calls based on certain criteria. Records are hard-filtered
+        by changing the value in the FILTER field to something other than PASS.
+        """
+
+        jobs = []
+
+        for sample in self.samples:
+            input_file_prefix = os.path.join("alignment", sample.name, sample.name)
+
+            varflt_other_options = config.param('gatk_variant_filtration', 'other_options')
+
+            jobs.append(concat_jobs([
+                gatk.variant_filtration( input_file_prefix + ".hc.vcf.gz", input_file_prefix + ".hc.flt.vcf.gz", varflt_other_options)            
+            ], name="gatk_variant_filtration." + sample.name))
 
         return jobs
 
@@ -480,14 +965,13 @@ pandoc \\
 
         This step takes as input files: readset Bam files.
         """
-
+    
         jobs = []
         for readset in self.readsets:
-            readset_bam = os.path.join("alignment", readset.sample.name, readset.name , "Aligned.sortedByCoord.out.bam")
-            output_folder = os.path.join("metrics",readset.sample.name, readset.name)
-            readset_metrics_bam = os.path.join(output_folder,readset.name +"rRNA.bam")
-
-
+            readset_bam = os.path.join("alignment", readset.sample.name, readset.name, "Aligned.sortedByCoord.out.bam")
+            output_folder = os.path.join("metrics", readset.sample.name, readset.name)
+            readset_metrics_bam = os.path.join(output_folder, readset.name + "rRNA.bam")
+        
             job = concat_jobs([
                 Job(command="mkdir -p " + os.path.dirname(readset_bam) + " " + output_folder),
                 pipe_jobs([
@@ -498,13 +982,15 @@ pandoc \\
                         "/dev/stdin",
                         None,
                         read_group="'@RG" + \
-                            "\tID:" + readset.name + \
-                            "\tSM:" + readset.sample.name + \
-                            ("\tLB:" + readset.library if readset.library else "") + \
-                            ("\tPU:run" + readset.run + "_" + readset.lane if readset.run and readset.lane else "") + \
-                            ("\tCN:" + config.param('bwa_mem_rRNA', 'sequencing_center') if config.param('bwa_mem_rRNA', 'sequencing_center', required=False) else "") + \
-                            "\tPL:Illumina" + \
-                            "'",
+                                   "\tID:" + readset.name + \
+                                   "\tSM:" + readset.sample.name + \
+                                   ("\tLB:" + readset.library if readset.library else "") + \
+                                   (
+                                       "\tPU:run" + readset.run + "_" + readset.lane if readset.run and readset.lane else "") + \
+                                   ("\tCN:" + config.param('bwa_mem_rRNA', 'sequencing_center') if config.param(
+                                       'bwa_mem_rRNA', 'sequencing_center', required=False) else "") + \
+                                   "\tPL:Illumina" + \
+                                   "'",
                         ref=config.param('bwa_mem_rRNA', 'ribosomal_fasta'),
                         ini_section='bwa_mem_rRNA'
                     ),
@@ -515,17 +1001,57 @@ pandoc \\
                         ini_section='picard_sort_sam_rrna'
                     )
                 ]),
-                tools.py_rrnaBAMcount (
+                tools.py_rrnaBAMcount(
                     bam=readset_metrics_bam,
                     gtf=config.param('bwa_mem_rRNA', 'gtf'),
-                    output=os.path.join(output_folder,readset.name+"rRNA.stats.tsv"),
-                    typ="transcript")], name="bwa_mem_rRNA." + readset.name )
-
-            job.removable_files=[readset_metrics_bam]
+                    output=os.path.join(output_folder, readset.name + "rRNA.stats.tsv"),
+                    typ="transcript")], name="bwa_mem_rRNA." + readset.name)
+        
+            job.removable_files = [readset_metrics_bam]
             job.samples = [readset.sample]
             jobs.append(job)
         return jobs
 
+    def run_star_fusion(self):
+        """
+
+        """
+
+        jobs = []
+
+        for sample in self.samples:
+            input_file_prefix = os.path.join("trim", sample.name, sample.name + "-trimmed-")
+
+            output_dir = os.path.join("fusion", sample.name, "star_fusion")
+
+            mkdir_job = Job(command="mkdir -p " + output_dir)
+
+            jobs.append(concat_jobs([
+                mkdir_job,
+                star_fusion.run( input_file_prefix + "pair1.fastq.gz", input_file_prefix + "pair2.fastq.gz", output_dir)
+            ], name="run_star_fusion." + sample.name))
+
+        return jobs
+
+    def run_star_seqr(self):
+        """
+
+        """
+
+        jobs = []
+
+        for sample in self.samples:
+            input_file_prefix = os.path.join("trim", sample.name, sample.name + "-trimmed-")
+
+            output_dir = os.path.join("fusion", sample.name, "star_seqr")
+            mkdir_job = Job(command="mkdir -p " + output_dir)
+
+            jobs.append(concat_jobs([
+                mkdir_job,
+                star_seqr.run( input_file_prefix + "pair1.fastq.gz", input_file_prefix + "pair2.fastq.gz", sample.name)
+            ], name="run_star_seqr." + sample.name))
+
+        return jobs
 
     def wiggle(self):
         """
@@ -1158,59 +1684,97 @@ done""".format(
     @property
     def steps(self):
         return [
-            [self.picard_sam_to_fastq,
-            self.trimmomatic,
-            self.merge_trimmomatic_stats,
-            self.star,
-            self.picard_merge_sam_files,
-            self.picard_sort_sam,
-            self.picard_mark_duplicates,
-            self.picard_rna_metrics,
-            self.estimate_ribosomal_rna,
-            self.bam_hard_clip,
-            self.rnaseqc,
-            self.wiggle,
-            self.raw_counts,
-            self.raw_counts_metrics,
-            self.stringtie,
-            self.stringtie_merge,
-            self.stringtie_abund,
-            self.ballgown,
-            self.differential_expression,
-            self.cram_output
+            [
+                self.picard_sam_to_fastq,
+                self.trimmomatic,
+                self.merge_trimmomatic_stats,
+                self.star,
+                self.picard_merge_sam_files,
+                self.picard_sort_sam,
+                self.picard_mark_duplicates,
+                self.picard_rna_metrics,
+                self.estimate_ribosomal_rna,
+                self.bam_hard_clip,
+                self.rnaseqc,
+                self.wiggle,
+                self.raw_counts,
+                self.raw_counts_metrics,
+                self.stringtie,
+                self.stringtie_merge,
+                self.stringtie_abund,
+                self.ballgown,
+                self.differential_expression,
+                self.cram_output
             ],
-            [self.picard_sam_to_fastq,
-            self.trimmomatic,
-            self.merge_trimmomatic_stats,
-            self.star,
-            self.picard_merge_sam_files,
-            self.picard_sort_sam,
-            self.picard_mark_duplicates,
-            self.picard_rna_metrics,
-            self.estimate_ribosomal_rna,
-            self.bam_hard_clip,
-            self.rnaseqc,
-            self.wiggle,
-            self.raw_counts,
-            self.raw_counts_metrics,
-            self.cufflinks,
-            self.cuffmerge,
-            self.cuffquant,
-            self.cuffdiff,
-            self.cuffnorm,
-            self.fpkm_correlation_matrix,
-            self.gq_seq_utils_exploratory_analysis_rnaseq,
-            self.differential_expression,
-            self.differential_expression_goseq,
-            self.ihec_metrics,
-            self.cram_output
+            [
+                self.picard_sam_to_fastq,
+                self.trimmomatic,
+                self.merge_trimmomatic_stats,
+                self.star,
+                self.picard_merge_sam_files,
+                self.picard_sort_sam,
+                self.picard_mark_duplicates,
+                self.picard_rna_metrics,
+                self.estimate_ribosomal_rna,
+                self.bam_hard_clip,
+                self.rnaseqc,
+                self.wiggle,
+                self.raw_counts,
+                self.raw_counts_metrics,
+                self.cufflinks,
+                self.cuffmerge,
+                self.cuffquant,
+                self.cuffdiff,
+                self.cuffnorm,
+                self.fpkm_correlation_matrix,
+                self.gq_seq_utils_exploratory_analysis_rnaseq,
+                self.differential_expression,
+                self.differential_expression_goseq,
+                self.ihec_metrics,
+                self.cram_output
+            ],
+            [
+                self.picard_sam_to_fastq,
+                self.skewer_trimming,
+                self.star,
+                self.sambamba_merge_sam_files,
+                self.sambamba_sort_sam,
+                self.picard_mark_duplicates,
+                self.split_N_trim,
+                self.sambamba_merge_splitNtrim_files,
+                self.gatk_indel_realigner,
+                self.sambamba_merge_realigned,
+                self.recalibration,
+                self.gatk_haplotype_caller,
+                self.merge_hc_vcf,
+                self.variant_filtration,
+                self.run_star_fusion,
+                self.run_star_seqr,
+                self.picard_rna_metrics,
+                self.estimate_ribosomal_rna,
+                self.bam_hard_clip,
+                self.rnaseqc,
+                self.wiggle,
+                self.raw_counts,
+                self.raw_counts_metrics,
+                self.cufflinks,
+                self.cuffmerge,
+                self.cuffquant,
+                self.cuffdiff,
+                self.cuffnorm,
+                self.fpkm_correlation_matrix,
+                self.gq_seq_utils_exploratory_analysis_rnaseq,
+                self.differential_expression,
+                self.differential_expression_goseq,
+                self.ihec_metrics,
+                self.cram_output
             ]
         ]
 class RnaSeq(RnaSeqRaw):
     def __init__(self, protocol=None):
         self._protocol = protocol
         # Add pipeline specific arguments
-        self.argparser.add_argument("-t", "--type", help="RNAseq analysis type", choices=["stringtie","cufflinks"], default="stringtie")
+        self.argparser.add_argument("-t", "--type", help="RNAseq analysis type", choices=["stringtie","cufflinks","variants"], default="stringtie")
         super(RnaSeq, self).__init__(protocol)
 
 if __name__ == '__main__':
@@ -1218,4 +1782,4 @@ if __name__ == '__main__':
     if '--wrap' in argv:
         utils.utils.container_wrapper_argparse(argv)
     else:
-        RnaSeq(protocol=['stringtie','cufflinks'])
+        RnaSeq(protocol=['cufflinks','stringtie','variants'])

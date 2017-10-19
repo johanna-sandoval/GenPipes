@@ -653,7 +653,6 @@ java -Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram} -jar $GATK_JAR \\
         )
     )
 
-
 def variant_filtration(input, output, other_options):
     return Job(
         [input],
