@@ -29,7 +29,7 @@ from core.job import *
 
 log = logging.getLogger(__name__)
 
-<<<<<<< HEAD
+
 def run(fastqs1, fastqs2, output_dir):
     output_file = os.path.join(output_dir, "fusion_predictions.abridged.coding_effect.tsv")
     jxt_file = os.path.join(output_dir, "Chimeric.out.junction")
@@ -37,22 +37,17 @@ def run(fastqs1, fastqs2, output_dir):
     return Job(
         fastqs1,
         [output_file,jxt_file,star_file],
-=======
-def run(fastq1, fastq2, output_dir):
+
+def run(fastqs1, fastqs2, output_dir):
+    output_file = os.path.join(output_dir, "star-fusion.fusion_predictions.tsv")
     return Job(
-        [fastq1, fastq2],
-        output_dir,
->>>>>>> 7044fc6c (Updates and bug fixes)
+        fastqs1,
+        [output_file],
         [
             ['run_star_fusion','module_perl'],
             ['run_star_fusion','module_star'],
             ['run_star_fusion','module_samtools'],
-<<<<<<< HEAD
-            ['run_star_fusion','module_star_fusion'],
-            #['run_star_fusion', 'module_gcc']
-=======
             ['run_star_fusion','module_star_fusion']
->>>>>>> 7044fc6c (Updates and bug fixes)
         ],
 
         command="""\
@@ -64,13 +59,8 @@ def run(fastq1, fastq2, output_dir):
             genome_build=config.param('run_star_fusion', 'genome_build'),
             threads=config.param('run_star_fusion', 'threads', type='posint'),
             options=config.param('run_star_fusion', 'options'),
-<<<<<<< HEAD
             fastq1=",".join(fastq1 for fastq1 in fastqs1),
             fastq2=",".join(fastq2 for fastq2 in fastqs2),
-=======
-            fastq1=fastq1,
-            fastq2=fastq2,
->>>>>>> 7044fc6c (Updates and bug fixes)
             output_dir=output_dir,
         ),
     )
