@@ -87,7 +87,7 @@ def align(
 
     ## Chimeric information
     if search_chimeres and chimere_segment_min != "":
-        chim_cmd = "--chimSegmentMin " + str(chimere_segment_min)
+        chim_cmd = "--chimSegmentMin " + str(chimere_segment_min) + " --chimJunctionOverhangMin " + str(chimere_segment_min) + " --chimSegmentReadGapMax 3"
     else:
         chim_cmd = ""
 

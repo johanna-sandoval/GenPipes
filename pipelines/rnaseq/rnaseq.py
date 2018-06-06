@@ -927,7 +927,7 @@ pandoc --to=markdown \\
             else:
                 unique_sequences_per_job,unique_sequences_per_job_others = split_by_size(self.sequence_dictionary, nb_haplotype_jobs - 1)
 
-                vcfs_to_merge = [haplotype_file_prefix + "." + str(idx) + ".hc.vcf.gz" for idx in xrange(len(unique_sequences_per_job))]
+                vcfs_to_merge = [haplotype_file_prefix + "." + str(idx) + ".hc.vcf.gz" for idx in range(len(unique_sequences_per_job))]
                 vcfs_to_merge.append(haplotype_file_prefix + ".others.hc.vcf.gz")
 
             jobs.append(concat_jobs([

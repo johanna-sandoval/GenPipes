@@ -29,10 +29,11 @@ from core.job import *
 
 log = logging.getLogger(__name__)
 
-def run(fastq1, fastq2, output_dir):
+def run(fastq1, fastq2, sample_id, output_dir):
+    output_file = os.path.join(output_dir, sample_id + "_STAR-SEQR_breakpoints.bedpe")
     return Job(
         [fastq1, fastq2],
-        output_dir,
+        [output_file],
         [
             ['run_star_seqr', 'module_conda']
         ],
