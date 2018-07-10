@@ -35,23 +35,18 @@ def run(fusion_lists, fastqs1, fastqs2, sample_name, output_dir):
         [fusion_lists],
         [output_file],
         [
-	        ['fusion_annotation', 'module_perl'],
-	        ['fusion_annotation', 'module_python'],
-	        ['fusion_annotation', 'module_htslib'],
-	        ['fusion_annotation', 'module_jellyfish'],
-	        ['fusion_annotation', 'module_salmon'],
-	        ['fusion_annotation', 'module_gmap'],
-	        ['fusion_annotation', 'module_java'],
-	        ['fusion_annotation', 'module_trinity'],
-			['fusion_annotation', 'module_bowtie2'],
-	        ['fusion_annotation', 'module_star'],
-            ['fusion_annotation', 'module_samtools'],
-            ['fusion_annotation', 'module_star_fusion'],
-	        ['fusion_annotation', "module_gcc"],
+	        ['run_fusioninspector', 'module_perl'],
+	        ['run_fusioninspector', 'module_python'],
+	        ['run_fusioninspector', 'module_htslib'],
+	        ['run_fusioninspector', 'module_gmap'],
+	        ['run_fusioninspector', 'module_trinity'],
+	        ['run_fusioninspector', 'module_star'],
+            ['run_fusioninspector', 'module_samtools'],
+            ['run_fusioninspector', 'module_star_fusion'],
         ],
 
         command="""\
-$FUSIONINSPECTOR_HOME/FusionInspector \\
+$FUSIONINSPECTOR_HOME/FusionInspector {options} \\
         --fusions {fusion_list} \\
         --genome_lib_dir {genome_build} \\
         --left_fq {fastq1} \\

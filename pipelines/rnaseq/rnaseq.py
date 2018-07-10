@@ -1707,7 +1707,7 @@ pandoc --to=markdown \\
             jobs.append(job)
     
         return jobs
- 
+
     def wiggle(self):
         """
         Generate wiggle tracks suitable for multiple browsers.
@@ -1740,7 +1740,7 @@ pandoc --to=markdown \\
                 bam_f_job = concat_jobs([
                     samtools.view(input_bam, input_bam_f1, "-bh -F 256 -f 81"),
                     samtools.view(input_bam, input_bam_f2, "-bh -F 256 -f 161"),
-                    gatk4.merge_sam_files([input_bam_f1, input_bam_f2], output_bam_f),
+                    picard.merge_sam_files([input_bam_f1, input_bam_f2], output_bam_f),
                     Job(command="rm " + input_bam_f1 + " " + input_bam_f2)
                 ], name="wiggle." + sample.name + ".forward_strandspec")
                 bam_f_job.samples = [sample]
@@ -1752,7 +1752,7 @@ pandoc --to=markdown \\
                     Job(command="mkdir -p " + os.path.join("tracks", sample.name) + " " + os.path.join("tracks", "bigWig")),
                     samtools.view(input_bam, input_bam_r1, "-bh -F 256 -f 97"),
                     samtools.view(input_bam, input_bam_r2, "-bh -F 256 -f 145"),
-                    gatk4.merge_sam_files([input_bam_r1, input_bam_r2], output_bam_r),
+                    picard.merge_sam_files([input_bam_r1, input_bam_r2], output_bam_r),
                     Job(command="rm " + input_bam_r1 + " " + input_bam_r2)
                 ], name="wiggle." + sample.name + ".reverse_strandspec")
                 bam_r_job.samples = [sample]
@@ -1875,7 +1875,7 @@ rm {output_directory}/tmpSort.txt {output_directory}/tmpMatrix.txt""".format(
 
         wiggle_directory = os.path.join("tracks", "bigWig")
         wiggle_archive = "tracks.zip"
-        if config.param('DEFAULT', 'strand_info') != 'fr-unstranded':
+        if config.param('DEFAULT', 'strand_info') != 'fr-unstranded' :
             wiggle_files = []
             for sample in self.samples:
                 wiggle_files.extend([os.path.join(wiggle_directory, sample.name) + ".forward.bw", os.path.join(wiggle_directory, sample.name) + ".reverse.bw"])
@@ -2091,18 +2091,18 @@ END
         jobs = []
 
         fpkm_directory = "cufflinks"
-        gtf = os.path.join(fpkm_directory, "AllSamples", "merged.gtf")
+        gtf = os.path.join(fpkm_directory, "AllSamples","merged.gtf")
+
 
         # Perform cuffdiff on each design contrast
         for contrast in self.contrasts:
             job = cufflinks.cuffdiff(
                 # Cuffdiff input is a list of lists of replicate bams per control and per treatment
-                [[os.path.join(fpkm_directory, sample.name, "abundances.cxb") for sample in group] for group in
-                 [contrast.controls, contrast.treatments]],
+                [[os.path.join(fpkm_directory, sample.name, "abundances.cxb") for sample in group] for group in [contrast.controls, contrast.treatments]],
                 gtf,
                 os.path.join("cuffdiff", contrast.name)
             )
-            for group in [contrast.controls, contrast.treatments]:
+            for group in contrast.controls, contrast.treatments:
                 job.samples = [sample for sample in group]
             job.removable_files = ["cuffdiff"]
             job.name = "cuffdiff." + contrast.name
@@ -2406,21 +2406,28 @@ done""".format(
                 self.recalibration,
                 self.gatk_haplotype_caller,
                 self.merge_hc_vcf,
-                self.run_vcfanno,
                 self.variant_filtration,
-                self.decompose_and_normalize,
-                self.compute_snp_effects,
-                self.gemini_annotations,
                 self.run_star_fusion,
+                self.run_discasm_gmap_fusion,
+                self.run_star_seqr,
                 self.run_arriba,
-                self.run_annofuse,
+                self.fusion_annotation,
                 self.picard_rna_metrics,
                 self.estimate_ribosomal_rna,
+                self.bam_hard_clip,
                 self.rnaseqc,
-                self.gatk_callable_loci,
                 self.wiggle,
                 self.raw_counts,
                 self.raw_counts_metrics,
+                self.cufflinks,
+                self.cuffmerge,
+                self.cuffquant,
+                self.cuffdiff,
+                self.cuffnorm,
+                self.fpkm_correlation_matrix,
+                self.gq_seq_utils_exploratory_analysis_rnaseq,
+                self.differential_expression,
+                self.differential_expression_goseq,
                 self.ihec_metrics,
                 self.cram_output
             ]

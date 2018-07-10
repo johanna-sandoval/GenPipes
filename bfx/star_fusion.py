@@ -40,9 +40,11 @@ def run(fastqs1, fastqs2, output_dir):
 
 def run(fastqs1, fastqs2, output_dir):
     output_file = os.path.join(output_dir, "star-fusion.fusion_predictions.tsv")
+    jxt_file = os.path.join(output_dir, "Chimeric.out.junction")
+    star_file = os.path.join(output_dir, "std.STAR.bam")
     return Job(
         fastqs1,
-        [output_file],
+        [output_file,jxt_file,star_file],
         [
             ['run_star_fusion','module_perl'],
             ['run_star_fusion','module_star'],

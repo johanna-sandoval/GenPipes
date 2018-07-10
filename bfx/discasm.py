@@ -30,21 +30,18 @@ from core.job import *
 log = logging.getLogger(__name__)
 
 def run(fastqs1, fastqs2, chimeric_jxt, star_fusion_bam, output_dir):
-	
     output_file = os.path.join(output_dir, "trinity_out_dir", "Trinity.fasta")
     return Job(
         [chimeric_jxt,star_fusion_bam],
         [output_file],
         [
-            ['run_discasm', 'module_java'],
-            ['run_discasm', 'module_discasm'],
-            ['run_discasm', 'module_perl'],
-            ['run_discasm', 'module_bowtie'],
-            ['run_discasm', 'module_trinity'],
-            ['run_discasm', 'module_bowtie2'],
+	        ['run_discasm', 'module_discasm'],
+	        ['run_discasm', 'module_perl'],
+	        ['run_discasm', 'module_python'],
+	        ['run_discasm', 'module_trinity'],
+	        ['run_discasm', 'module_bowtie'],
             ['run_discasm', 'module_jellyfish'],
             ['run_discasm', 'module_salmon'],
-	        ['run_discasm', 'module_python'],
         ],
 
         command="""\

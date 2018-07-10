@@ -29,10 +29,10 @@ from core.job import *
 
 log = logging.getLogger(__name__)
 
-def run(fastq1, fastq2, sample_id, output_dir):
-    output_file = os.path.join(output_dir, sample_id + "_STAR-SEQR_breakpoints.bedpe")
+def run(fastqs1, fastqs2, output_dir):
+    output_file = os.path.join(output_dir + "_STAR-SEQR", "star_seqr_STAR-SEQR_breakpoints.bedpe")
     return Job(
-        [fastq1, fastq2],
+        fastqs1,
         [output_file],
         [
             ['run_star_seqr', 'module_conda']
@@ -51,8 +51,8 @@ def run(fastq1, fastq2, sample_id, output_dir):
             reference=config.param('run_star_seqr', 'reference'),
             threads=config.param('run_star_seqr', 'threads', type='posint'),
             options=config.param('run_star_seqr', 'options'),
-            fastq1=fastq1,
-            fastq2=fastq2,
+            fastq1=",".join(fastq1 for fastq1 in fastqs1),
+            fastq2=",".join(fastq2 for fastq2 in fastqs2),
             output_dir=output_dir,
         ),
     )

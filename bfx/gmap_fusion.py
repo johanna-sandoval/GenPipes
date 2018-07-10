@@ -36,7 +36,6 @@ def run(fastqs1, fastqs2, transcripts, output_dir):
         [output_file],
         [
 	        ['run_gmap_fusion', 'module_perl'],
-	        #['run_gmap_fusion', 'module_gcc'],
 	        ['run_gmap_fusion', 'module_bowtie2'],
             ['run_gmap_fusion', 'module_gmap'],
 	        ['run_gmap_fusion', 'module_gmap_fusion'],
