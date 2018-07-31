@@ -30,6 +30,7 @@ from core.job import *
 log = logging.getLogger(__name__)
 
 def run(fastqs1, fastqs2, chimeric_jxt, star_fusion_bam, output_dir):
+	
     output_file = os.path.join(output_dir, "trinity_out_dir", "Trinity.fasta")
     return Job(
         [chimeric_jxt,star_fusion_bam],
@@ -56,8 +57,8 @@ DISCASM {options} \\
 	        star_fusion_bam=star_fusion_bam,
             options=config.param('run_discasm_gmap_fusion', 'trinity_options'),
 	        denovo_assembler="Trinity",
-            fastq1=",".join(fastq1 for fastq1 in fastqs1),
-            fastq2=",".join(fastq2 for fastq2 in fastqs2),
+            fastq1=fastqs1,
+            fastq2=fastqs2,
             output_dir=output_dir,
         ),
     )
