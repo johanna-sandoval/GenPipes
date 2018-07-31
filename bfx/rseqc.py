@@ -34,14 +34,13 @@ def bam_stat(input, output):
         [input],
         [output],
         [
-            ['rnaseqr','module_rnaseqr'],
             ['rnaseqr','module_python']
         ],
 
     command="""\
     bam_stat.py \\
         -i {input} \\
-        -q 10 \\
+        -q 30 \\
         > {output}""".format(
             input=input,
             output=output,
@@ -53,7 +52,6 @@ def gene_body_coverage(input, output):
         [input],
         [output],
         [
-            ['rnaseqr', 'module_rnaseqr'],
             ['rnaseqr', 'module_python']
         ],
 
@@ -73,7 +71,6 @@ def infer_experiment(input, output):
         [input],
         [output],
         [
-            ['rnaseqr', 'module_rnaseqr'],
             ['rnaseqr', 'module_python']
         ],
 
@@ -93,7 +90,6 @@ def inner_distance(input, output):
         [input],
         [output],
         [
-            ['rnaseqr', 'module_rnaseqr'],
             ['rnaseqr', 'module_python']
         ],
 
@@ -113,7 +109,6 @@ def junction_annotation(input, output):
         [input],
         [output],
         [
-            ['rnaseqr', 'module_rnaseqr'],
             ['rnaseqr', 'module_python']
         ],
 
@@ -133,7 +128,6 @@ def junction_saturation(input, output):
         [input],
         [output],
         [
-            ['rnaseqr', 'module_rnaseqr'],
             ['rnaseqr', 'module_python']
         ],
 

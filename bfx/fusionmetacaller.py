@@ -31,6 +31,7 @@ log = logging.getLogger(__name__)
 
 def run(input_folder, output_folder, sample_name):
     input = os.path.join(input_folder, sample_name + ".arriba.tsv")
+    #output = os.path.join(output_folder, sample_name + ".metacaller.1.tsv")
     output = os.path.join(output_folder, sample_name + ".metacaller.2.tsv")
     return Job(
         [input],

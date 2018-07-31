@@ -30,32 +30,35 @@ from core.job import *
 log = logging.getLogger(__name__)
 
 def run(fusion_lists, fastqs1, fastqs2, sample_name, output_dir):
-    output_file = os.path.join(output_dir, sample_name + ".fusion_predictions.final.abridged.FFPM")
+    output_file = os.path.join(output_dir, sample_name + ".fusion_predictions.final.abridged.FFPM.annotated.coding_effect")
     return Job(
         [fusion_lists],
         [output_file],
         [
-	        ['run_fusioninspector', 'module_perl'],
-	        ['run_fusioninspector', 'module_python'],
-	        ['run_fusioninspector', 'module_htslib'],
-	        ['run_fusioninspector', 'module_gmap'],
-	        ['run_fusioninspector', 'module_trinity'],
-	        ['run_fusioninspector', 'module_star'],
-            ['run_fusioninspector', 'module_samtools'],
-            ['run_fusioninspector', 'module_star_fusion'],
+	        ['fusion_annotation', 'module_perl'],
+	        ['fusion_annotation', 'module_python'],
+	        ['fusion_annotation', 'module_htslib'],
+	        ['fusion_annotation', 'module_gmap'],
+	        ['fusion_annotation', 'module_trinity'],
+	        ['fusion_annotation', 'module_star'],
+            ['fusion_annotation', 'module_samtools'],
+            ['fusion_annotation', 'module_star_fusion'],
         ],
 
         command="""\
-$FUSIONINSPECTOR_HOME/FusionInspector {options} \\
+$FUSIONINSPECTOR_HOME/FusionInspector \\
         --fusions {fusion_list} \\
         --genome_lib_dir {genome_build} \\
         --left_fq {fastq1} \\
         --right_fq {fastq2} \\
+        --CPU {threads} \\
         --out_prefix {sample_name} \\
-        --out_dir {output_dir}""".format(
+        --out_dir {output_dir} \\
+        {options}""".format(
             fusion_list=fusion_lists,
 	        genome_build=config.param('run_star_fusion', 'genome_build'),
-            options=config.param('run_star_fusion', 'options'),
+            options=config.param('fusion_annotation', 'options'),
+	        threads=config.param('fusion_annotation', 'threads'),
             fastq1=",".join(fastq1 for fastq1 in fastqs1),
             fastq2=",".join(fastq2 for fastq2 in fastqs2),
 	        sample_name=sample_name,

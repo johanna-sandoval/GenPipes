@@ -30,7 +30,7 @@ from core.job import *
 log = logging.getLogger(__name__)
 
 def run(fastqs1, fastqs2, output_dir):
-    output_file = os.path.join(output_dir, "star-fusion.fusion_predictions.tsv")
+    output_file = os.path.join(output_dir, "star-fusion.fusion_predictions.abridged.tsv")
     jxt_file = os.path.join(output_dir, "Chimeric.out.junction")
     star_file = os.path.join(output_dir, "std.STAR.bam")
     return Job(

@@ -47,14 +47,15 @@ def run(fastqs1, fastqs2, transcripts, output_dir):
         command="""\
 $GMAPF_HOME/GMAP-fusion {options} \\
         --transcripts {transcripts} \\
+        --genome_lib_dir {genome_build} \\
         --left_fq {fastq1} \\
         --right_fq {fastq2}
         --output {output_dir}""".format(
             options=config.param('run_gmap_fusion', 'options'),
 	        genome_build=config.param('run_gmap_fusion', 'genome_build'),
 	        transcripts=transcripts,
-            fastq1=",".join(fastq1 for fastq1 in fastqs1),
-            fastq2=",".join(fastq2 for fastq2 in fastqs2),
+            fastq1=fastqs1,
+            fastq2=fastqs2,
 	        output_dir=output_dir,
         ),
     )
