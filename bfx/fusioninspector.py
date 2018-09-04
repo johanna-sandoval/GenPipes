@@ -38,6 +38,8 @@ def run(fusion_lists, fastqs1, fastqs2, sample_name, output_dir):
 	        ['fusion_annotation', 'module_perl'],
 	        ['fusion_annotation', 'module_python'],
 	        ['fusion_annotation', 'module_htslib'],
+	        ['fusion_annotation', 'module_jellyfish'],
+	        ['fusion_annotation', 'module_gcc'],
 	        ['fusion_annotation', 'module_gmap'],
 	        ['fusion_annotation', 'module_trinity'],
 	        ['fusion_annotation', 'module_star'],
