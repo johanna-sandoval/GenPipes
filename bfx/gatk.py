@@ -361,14 +361,14 @@ java -Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram} -jar $GATK_JAR \\
 
 def indel_realigner(input,
                     target_intervals,
-                    input2=[],
-                    output=[],
-                    output_dir=[],
+                    input2=None,
+                    output=None,
+                    output_dir=None,
                     output_norm_dep=[],
                     output_tum_dep=[],
                     intervals=[],
                     exclude_intervals=[],
-                    optional=[]
+                    optional=None
                     ):
     
     output_dep = output_norm_dep + output_tum_dep
@@ -441,8 +441,8 @@ java -Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram} -jar $GATK_JAR \\
 
 def realigner_target_creator(input,
                              output,
-                             output_dir=[],
-                             input2=[],
+                             output_dir=None,
+                             input2=None,
                              intervals=[],
                              exclude_intervals=[]
                              ):

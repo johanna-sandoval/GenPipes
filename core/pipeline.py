@@ -499,6 +499,7 @@ pandoc \\
             abspath_removable_files.extend([job.abspath(removable_file) for removable_file in job.removable_files])
         # Remove removable file duplicates but keep the order
         for removable_file in list(collections.OrderedDict.fromkeys(abspath_removable_files)):
+            print removable_file
             if os.path.exists(removable_file):
                 print("rm -rf " + removable_file)
 
