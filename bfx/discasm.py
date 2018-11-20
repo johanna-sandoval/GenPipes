@@ -39,11 +39,11 @@ def run(fastqs1, fastqs2, chimeric_jxt, star_fusion_bam, output_dir):
             ['run_discasm', 'module_java'],
 	        ['run_discasm', 'module_discasm'],
 	        ['run_discasm', 'module_perl'],
-	        ['run_discasm', 'module_python'],
 	        ['run_discasm', 'module_trinity'],
 	        ['run_discasm', 'module_bowtie2'],
-            ['run_discasm', 'module_jellyfish'],
-            ['run_discasm', 'module_salmon'],
+            	['run_discasm', 'module_jellyfish'],
+            	['run_discasm', 'module_salmon'],
+		['run_discasm', 'module_python'],
         ],
 
         command="""\
