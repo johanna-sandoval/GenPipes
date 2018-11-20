@@ -40,7 +40,8 @@ def run(fastqs1, fastqs2, output_dir):
             ['run_star_fusion','module_perl'],
             ['run_star_fusion','module_star'],
             ['run_star_fusion','module_samtools'],
-            ['run_star_fusion','module_star_fusion']
+            ['run_star_fusion','module_star_fusion'],
+            ['run_star_fusion', 'module_gcc']
         ],
 
         command="""\

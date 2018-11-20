@@ -39,11 +39,11 @@ def run(fastqs1, fastqs2, chimeric_jxt, star_fusion_bam, output_dir):
             ['run_discasm', 'module_java'],
 	        ['run_discasm', 'module_discasm'],
 	        ['run_discasm', 'module_perl'],
-	        ['run_discasm', 'module_python'],
 	        ['run_discasm', 'module_trinity'],
 	        ['run_discasm', 'module_bowtie2'],
-            ['run_discasm', 'module_jellyfish'],
-            ['run_discasm', 'module_salmon'],
+            	['run_discasm', 'module_jellyfish'],
+            	['run_discasm', 'module_salmon'],
+		['run_discasm', 'module_python'],
         ],
 
         command="""\
@@ -55,9 +55,9 @@ DISCASM {options} \\
         --denovo_assembler {denovo_assembler} \\       
         --out_dir {output_dir}""".format(
             chimeric_jxt=chimeric_jxt,
-	        star_fusion_bam=star_fusion_bam,
+	    star_fusion_bam=star_fusion_bam,
             options=config.param('run_discasm', 'trinity_options'),
-	        denovo_assembler="Trinity",
+	    denovo_assembler="Trinity",
             fastq1=",".join(fastq1 for fastq1 in fastqs1),
             fastq2=",".join(fastq2 for fastq2 in fastqs2),
             output_dir=output_dir,
