@@ -29,8 +29,8 @@ from core.job import *
 
 log = logging.getLogger(__name__)
 
-def run(fastqs1, fastqs2, transcripts, output_dir, final_dir):
-    output_file = os.path.join(final_dir, "GMAP-fusion.fusion_predictions.tsv")
+def run(fastqs1, fastqs2, transcripts, output_dir):
+    output_file = os.path.join(output_dir, "GMAP-fusion.fusion_predictions.tsv")
     return Job(
         [transcripts],
         [output_file],
