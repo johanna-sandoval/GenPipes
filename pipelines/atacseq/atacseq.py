@@ -42,6 +42,7 @@ from pipelines.chipseq import chipseq
 from bfx import picard
 from bfx import samtools
 from bfx import macs2
+from bfx import bowtie2
 
 
 log = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ class AtacSeq(chipseq.ChipSeq):
     @property
     def output_dirs(self):
         dirs = {'alignment_output_directory': 'alignment',
+                'trim_output_directory': 'trim',
                 'report_output_directory': 'report',
                 'metrics_output_directory': 'metrics',
                 'homer_output_directory': 'tags',
@@ -79,45 +81,63 @@ class AtacSeq(chipseq.ChipSeq):
                 }
         return dirs
 
-    def hicup_align(self):
+    def bowtie_align(self):
         """
-        Paired-end Hi-C reads are truncated, mapped and filtered using HiCUP. The resulting bam file is filtered for Hi-C artifacts and
-        duplicated reads. It is ready for use as input for downstream analysis.
+        Single ended or paired-ended reads are aligned to the genome using bowtie2. For PE mode, -X2000 is used to allow fragments up to 2Kb to align to capture open chromatin regions.
+        The reads are then sorted by coordinates using samtools.
 
-        For more detailed information about the HICUP process visit: [HiCUP] (https://www.bioinformatics.babraham.ac.uk/projects/hicup/overview/)
+        For more detailed information about the Bowtie2 process visit: [Bowtie] (http://bowtie-bio.sourceforge.net/bowtie2/index.shtml)
         """
 
         jobs = []
 
+        ## ENCODE standard multimapping=4
+        multimapping = config.param('bowtie_align', 'multimapping')
+        threads = config.param('bowtie_align', 'threads')
+        index = config.param('bowtie_align', 'genome_bwt2_index')
+
+
         for readset in self.readsets:
-            sample_output_dir = os.path.join(self.output_dirs['hicup_output_directory'], readset.sample.name, readset.name)
-            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + ".trim.")
+            sample_output_dir = os.path.join(self.output_dirs['alignment_output_directory'], readset.sample.name, readset.name)
+            trim_file_prefix = os.path.join(self.output_dirs['trim_output_directory'], readset.sample.name, readset.name + ".trim.")
+            bam = os.path.join(sample_output_dir, readset.name + ".bam")
+            
+            log = os.path.join(sample_output_dir, readset.name + ".bowtie_align.log")
 
-            if readset.run_type != "PAIRED_END":
+             # Find input readset FASTQs first from previous trimmomatic job, then from original FASTQs in the readset sheet
+            if readset.run_type == "PAIRED_END":
+                candidate_input_files = [[trim_file_prefix + "pair1.fastq.gz", trim_file_prefix + "pair2.fastq.gz"]]
+                if readset.fastq1 and readset.fastq2:
+                    candidate_input_files.append([readset.fastq1, readset.fastq2])
+                if readset.bam:
+                    candidate_input_files.append([re.sub("\.bam$", ".pair1.fastq.gz", readset.bam), re.sub("\.bam$", ".pair2.fastq.gz", readset.bam)])
+                [fastq1, fastq2] = self.select_input_files(candidate_input_files)
+            
+            elif readset.run_type == "SINGLE_END":
+                candidate_input_files = [[trim_file_prefix + "single.fastq.gz"]]
+                if readset.fastq1:
+                    candidate_input_files.append([readset.fastq1])
+                if readset.bam:
+                    candidate_input_files.append([re.sub("\.bam$", ".single.fastq.gz", readset.bam)])
+                [fastq1] = self.select_input_files(candidate_input_files)
+                fastq2 = None
+            
+            else:
                 raise Exception("Error: run type \"" + readset.run_type +
-                "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END for Hi-C analysis)!")
-
-            candidate_input_files = [[trim_file_prefix + "pair1.fastq.gz", trim_file_prefix + "pair2.fastq.gz"]]
-            if readset.fastq1 and readset.fastq2:
-                candidate_input_files.append([readset.fastq1, readset.fastq2])
-            if readset.bam:
-                candidate_input_files.append([re.sub("\.bam$", ".pair1.fastq.gz", readset.bam), re.sub("\.bam$", ".pair2.fastq.gz", readset.bam)])
-            [fastq1, fastq2] = self.select_input_files(candidate_input_files)
-
-            job_confFile = hicup.create_hicup_conf(readset.name, fastq1, fastq2, sample_output_dir, self.genome_digest)
-
-            job_hicup = hicup.hicup_run(readset.name, "hicup_align." + readset.name + ".conf", sample_output_dir, fastq1, fastq2)
+                "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!")
 
             job = concat_jobs([
-                    job_confFile, job_hicup
-                ],
-                name = "hicup_align." + readset.name,
-                samples = [readset.sample]
-            )
+                Job(command="mkdir -p " + sample_output_dir),
+                bowtie2.align_samtools_sort(bam, fastq1, fastq2, multimapping, index, threads, 'bowtie_align', log)
+            ])
+            job.name = "align_samtools_sort." + readset.name
+            job.samples = [readset.sample]
 
             jobs.append(job)
 
-        return jobs
+        return jobs    
+
+
 
     def samtools_merge_bams(self):
         """
@@ -173,7 +193,8 @@ class AtacSeq(chipseq.ChipSeq):
             self.samtools_bam_sort,
             self.picard_sam_to_fastq,
             self.trimmomatic,
-            self.merge_trimmomatic_stats
+            self.merge_trimmomatic_stats,
+            self.bowtie_align
         ]
 
 if __name__ == '__main__':
