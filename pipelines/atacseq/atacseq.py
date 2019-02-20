@@ -211,16 +211,22 @@ class AtacSeq(chipseq.ChipSeq):
 
 
     def samtools_view_filter(self):
-        # jobs = []
-        # for sample in self.samples:
-        #     sample_prefix = os.path.join(self.output_dirs['alignment_output_directory'], sample.name, sample.name)
-        #     input_bam = sample_prefix +  ".sorted.dup.bam"
-        #     filtered_bam = sample_prefix + ".filtered.bam"
-        #     job = samtools.view(readset_bam, filtered_readset_bam, "-b -F4 -q " + str(config.param('samtools_view_filter', 'min_mapq', type='int')))
-        #     job.name = "samtools_view_filter." + readset.name
-        #     job.samples = [readset.sample]
-        #     jobs.append(job)
-        pass
+        jobs = []
+        for sample in self.samples:
+            sample_prefix = os.path.join(self.output_dirs['alignment_output_directory'], sample.name, sample.name)
+            input_bam = sample_prefix +  ".sorted.dup.bam"
+            filtered_bam = sample_prefix + ".filtered.bam"
+            ## remove chrM too: chrM, chM, chrMT, chMT, M, MT, NC_012920.1
+            if self.run_type == "PAIRED_END":
+                options = "-b -F 1804 -f 2 -q " + str(config.param('samtools_view_filter', 'min_mapq', type='int'))
+            else:
+                options = "-b -F 1804 -q " + str(config.param('samtools_view_filter', 'min_mapq', type='int'))
+            job = samtools.view(input_bam, filtered_bam, options)
+            job.name = "samtools_view_filter." + sample.name
+            job.samples = [sample.name]
+            jobs.append(job)
+        
+        return jobs
 
 
     @property
@@ -233,7 +239,8 @@ class AtacSeq(chipseq.ChipSeq):
             self.bowtie_align,
             self.samtools_merge_bams,
             self.samtools_sort_index,
-            self.picard_mark_duplicates
+            self.picard_mark_duplicates,
+            self.samtools_view_filter
         ]
 
 if __name__ == '__main__':
