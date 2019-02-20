@@ -43,6 +43,7 @@ from bfx import picard
 from bfx import samtools
 from bfx import macs2
 from bfx import bowtie2
+from bfx import samtools
 
 
 log = logging.getLogger(__name__)
@@ -100,7 +101,7 @@ class AtacSeq(chipseq.ChipSeq):
         for readset in self.readsets:
             sample_output_dir = os.path.join(self.output_dirs['alignment_output_directory'], readset.sample.name, readset.name)
             trim_file_prefix = os.path.join(self.output_dirs['trim_output_directory'], readset.sample.name, readset.name + ".trim.")
-            bam = os.path.join(sample_output_dir, readset.name + ".bam")
+            prefix = os.path.join(sample_output_dir, readset.name)
             
             log = os.path.join(sample_output_dir, readset.name + ".bowtie_align.log")
 
@@ -126,14 +127,15 @@ class AtacSeq(chipseq.ChipSeq):
                 raise Exception("Error: run type \"" + readset.run_type +
                 "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!")
 
-            job = concat_jobs([
+            job_align = concat_jobs([
                 Job(command="mkdir -p " + sample_output_dir),
-                bowtie2.align_samtools_sort(bam, fastq1, fastq2, multimapping, index, threads, 'bowtie_align', log)
+                bowtie2.align_atac(prefix, fastq1, fastq2, multimapping, index, threads, 'bowtie_align', log)
             ])
-            job.name = "align_samtools_sort." + readset.name
-            job.samples = [readset.sample]
+            job_align.name = "bowtie_align.align_atac." + readset.name
+            job_align.samples = [readset.sample]
 
-            jobs.append(job)
+
+            jobs.append(job_align)
 
         return jobs    
 
@@ -148,10 +150,10 @@ class AtacSeq(chipseq.ChipSeq):
 
         jobs = []
         for sample in self.samples:
-            sample_output = os.path.join(self.output_dirs['bams_output_directory'], sample.name, sample.name + ".merged.bam")
-            readset_bams = [os.path.join(self.output_dirs['hicup_output_directory'], readset.sample.name, readset.name, readset.name + ".trim.pair1_2.fastq.gz.edited.hicup.bam") for readset in sample.readsets]
+            sample_output = os.path.join(self.output_dirs['alignment_output_directory'], sample.name, sample.name + ".merged.bam")
+            readset_bams = [os.path.join(self.output_dirs['alignment_output_directory'], readset.sample.name, readset.name, readset.name + ".bam") for readset in sample.readsets]
 
-            mkdir_job = Job(command="mkdir -p " + self.output_dirs['bams_output_directory'])
+            mkdir_job = Job(command="mkdir -p " + self.output_dirs['alignment_output_directory'])
 
             # If this sample has one readset only, create a sample BAM symlink to the readset BAM.
             if len(sample.readsets) == 1:
@@ -186,6 +188,40 @@ class AtacSeq(chipseq.ChipSeq):
         return jobs
 
 
+    def samtools_sort_index(self):
+        jobs = []
+        for sample in self.samples:
+            sample_prefix = os.path.join(self.output_dirs['alignment_output_directory'], sample.name, sample.name)
+            sample_bam = sample_prefix + ".merged.bam"
+            sorted_readset_bam = sample_prefix + ".merged.sorted"
+
+            job_rename = Job(command = "mv " + sorted_readset_bam + ".bam " +  sample_bam)
+
+            jobs.append(concat_jobs([
+                samtools.sort(sample_bam, sorted_readset_bam),
+                job_rename,
+                samtools.index(sample_bam)
+                ], 
+                name = "samtools_sort_index." + sample.name ,
+                samples = [sample.name]))
+
+        return jobs
+
+
+
+
+    def samtools_view_filter(self):
+        # jobs = []
+        # for sample in self.samples:
+        #     sample_prefix = os.path.join(self.output_dirs['alignment_output_directory'], sample.name, sample.name)
+        #     input_bam = sample_prefix +  ".sorted.dup.bam"
+        #     filtered_bam = sample_prefix + ".filtered.bam"
+        #     job = samtools.view(readset_bam, filtered_readset_bam, "-b -F4 -q " + str(config.param('samtools_view_filter', 'min_mapq', type='int')))
+        #     job.name = "samtools_view_filter." + readset.name
+        #     job.samples = [readset.sample]
+        #     jobs.append(job)
+        pass
+
 
     @property
     def steps(self):
@@ -194,7 +230,10 @@ class AtacSeq(chipseq.ChipSeq):
             self.picard_sam_to_fastq,
             self.trimmomatic,
             self.merge_trimmomatic_stats,
-            self.bowtie_align
+            self.bowtie_align,
+            self.samtools_merge_bams,
+            self.samtools_sort_index,
+            self.picard_mark_duplicates
         ]
 
 if __name__ == '__main__':

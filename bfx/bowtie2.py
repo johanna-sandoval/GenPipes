@@ -27,34 +27,34 @@ from core.config import *
 from core.job import *
 
 
-def align_samtools_sort(sample, fastq1, fastq2=None,  multimapping=0, idx=None, threads=1, ini_section='bowtie_align', log='align_samtools_sort.log'):
+def align_atac(sample, fastq1, fastq2=None,  multimapping=0, idx=None, threads=1, ini_section='bowtie_align', log='align_samtools_sort.log'):
     
     other_options = config.param(ini_section, 'other_options', required=False)
+    bam = sample + ".bam"
 
     SE_reads = "-U " + fastq1
-    PE_reads = "--mm -X2000 -1 " + fastq1 + "-2 " + fastq2 if fastq2 else ""
+    PE_reads = "--mm -X2000 -1 " + fastq1 + " -2 " + fastq2 if fastq2 else ""
 
-    command_align = "bowtie2 {other_options}-k {multimapping} --local \
-            -x {bwt2_idx} \
-            --threads {nth_bwt2} \
-            {reads} \
-            2> {log} | \
-            samtools view -Su - | samtools sort - -o {prefix}".format(
+    command_align = """bowtie2 {other_options} \\
+    -k {multimapping} --local \\
+    -x {bwt2_idx} \\
+    --threads {nth_bwt2} \\
+    {reads} \\
+    | samtools view -bS - > {bam} \\
+    2> {log}""".format(
             other_options=" \\\n  " + other_options if other_options else "",
             multimapping = multimapping, 
             bwt2_idx = idx if idx else config.param(ini_section, 'genome_bwt2_index'),
             nth_bwt2 = threads,
             reads = PE_reads if fastq2 else SE_reads,
-            log = log,
-            prefix = sample
+            bam = bam,
+            log = log
             )
 
-    bam = sample + ".bam"
- 
     return Job(input_files = [fastq1, fastq2],
             output_files = [bam],
-            module_entries = [['align_samtools_sort', 'module_bowtie2'], ['align_samtools_sort', 'module_samtools']],
-            name = "align_samtools_sort." + sample,
-            command = command_align,
+            module_entries = [['align_atac', 'module_bowtie2'], ['align_atac', 'module_samtools']],
+            name = "align_atac." + sample,
+            command = command_align
             )
 
