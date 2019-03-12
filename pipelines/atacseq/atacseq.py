@@ -153,8 +153,7 @@ class AtacSeq(chipseq.ChipSeq):
             sample_output = os.path.join(self.output_dirs['alignment_output_directory'], sample.name, sample.name + ".merged.bam")
             readset_bams = [os.path.join(self.output_dirs['alignment_output_directory'], readset.sample.name, readset.name, readset.name + ".bam") for readset in sample.readsets]
 
-            mkdir_job = Job(command="mkdir -p " + self.output_dirs['alignment_output_directory'])
-
+            
             # If this sample has one readset only, create a sample BAM symlink to the readset BAM.
             if len(sample.readsets) == 1:
                 readset_bam = readset_bams[0]
@@ -163,23 +162,18 @@ class AtacSeq(chipseq.ChipSeq):
                 else:
                     target_readset_bam = os.path.relpath(readset_bam, os.path.dirname(sample_output))
 
-                job = concat_jobs([
-                    mkdir_job,
-                    Job(
+                job =  Job(
                         readset_bams,
                         [sample_output],
-                        command="ln -s -f " + target_readset_bam + " " + sample_output
-                    )
-                ], name="symlink_readset_sample_bam." + sample.name)
+                        command="ln -s -f " + target_readset_bam + " " + sample_output)
+                    
+                job.name="symlink_readset_sample_bam." + sample.name
 
             elif len(sample.readsets) > 1:
 
                 samtools_merge = samtools.merge(sample_output, readset_bams)
 
-                job = concat_jobs([
-                    mkdir_job,
-                    samtools_merge
-                ])
+                job = samtools_merge
                 job.name = "samtools_merge_bams." + sample.name
 
             job.samples = [sample]
@@ -195,11 +189,8 @@ class AtacSeq(chipseq.ChipSeq):
             sample_bam = sample_prefix + ".merged.bam"
             sorted_readset_bam = sample_prefix + ".merged.sorted"
 
-            job_rename = Job(command = "mv " + sorted_readset_bam + ".bam " +  sample_bam)
-
             jobs.append(concat_jobs([
                 samtools.sort(sample_bam, sorted_readset_bam),
-                job_rename,
                 samtools.index(sample_bam)
                 ], 
                 name = "samtools_sort_index." + sample.name ,
@@ -208,21 +199,82 @@ class AtacSeq(chipseq.ChipSeq):
         return jobs
 
 
+    def picard_mark_duplicates(self):
+        """
+        Mark duplicates. Aligned reads per sample are duplicates if they have the same 5' alignment positions
+        (for both mates in the case of paired-end reads). All but the best pair (based on alignment score)
+        will be marked as a duplicate in the BAM file. Marking duplicates is done using [Picard](http://broadinstitute.github.io/picard/).
+        """
+
+        jobs = []
+        for sample in self.samples:
+            alignment_file_prefix = os.path.join(self.output_dirs['alignment_output_directory'], sample.name, sample.name + ".")
+            input = alignment_file_prefix + "merged.sorted.bam"
+            output = alignment_file_prefix + "merged.sorted.dup.bam"
+            metrics_file = alignment_file_prefix + "merged.sorted.dup.metrics"
+
+            job = picard.mark_duplicates([input], output, metrics_file)
+            job.name = "picard_mark_duplicates." + sample.name
+            job.sample = [sample]
+            jobs.append(job)
+
+        return jobs
 
 
     def samtools_view_filter(self):
         jobs = []
         for sample in self.samples:
             sample_prefix = os.path.join(self.output_dirs['alignment_output_directory'], sample.name, sample.name)
-            input_bam = sample_prefix +  ".sorted.dup.bam"
-            filtered_bam = sample_prefix + ".filtered.bam"
-            ## remove chrM too: chrM, chM, chrMT, chMT, M, MT, NC_012920.1
+            input_bam = sample_prefix +  ".merged.sorted.dup.bam"
+            filtered_bam = sample_prefix + ".merged.sorted.dup.filtered.bam"
+            fasta_reference = config.param('DEFAULT', 'genome_fasta')
+            
+
+            ## Remove reads unmapped, not primary alignment, reads failing platform, duplicates, low quality mappings:
+
             if self.run_type == "PAIRED_END":
-                options = "-b -F 1804 -f 2 -q " + str(config.param('samtools_view_filter', 'min_mapq', type='int'))
+                samtools_options = "-b -F 1804 -f 2 -q " + str(config.param('samtools_view_filter', 'min_mapq', type='int'))
             else:
-                options = "-b -F 1804 -q " + str(config.param('samtools_view_filter', 'min_mapq', type='int'))
-            job = samtools.view(input_bam, filtered_bam, options)
-            job.name = "samtools_view_filter." + sample.name
+                samtools_options = "-b -F 1796 -q " + str(config.param('samtools_view_filter', 'min_mapq', type='int'))
+
+            ## remove chrM: chrM, chM, chrMT, chMT, M, MT, NC_012920.1
+
+            mito = ["chrM", "chM", "chrMT", "chMT", "M", "MT", "NC_012920.1"]
+            mito_extra = [chrM.strip() for chrM in config.param('samtools_view_filter', 'mito_chr_name', required = False).split(",")]
+
+            if len(mito_extra):
+                mito = list(set(mito + mito_extra))
+
+            mito_filter = "grep -v '{mito_str}'".format(mito_str = "|".join(mito)) 
+
+
+            ## remove blacklisted regions:
+            blacklist_bed = config.param('samtools_view_filter', 'blacklist',  required = False, type ='filepath')
+            blacklist_filter = "bedtools intersect -v -abam {input} -b {blacklist} > {output}".format(input = 'stdin', blacklist = blacklist_bed, output = filtered_bam)
+
+
+            ## build command:
+
+            cmd = "samtools view " + input_bam + "{options} | \\\n".format(options = config.param('samtools_view_filter', 'other_options', required = False))
+            cmd += mito_filter + " | \\\n"
+
+            if blacklist_bed:
+                cmd += "samtools view -bT {fasta_reference} - | \\\n".format(fasta_reference = fasta_reference)
+                cmd += blacklist_filter
+            else:
+                cmd += "samtools view -bT {fasta_reference} - -o {output}".format(
+                fasta_reference = fasta_reference,
+                output = filtered_bam)
+            
+
+
+            job = Job (input_files = [input_bam], 
+                output_files = [filtered_bam], 
+                module_entries = [['samtools_view_filter', 'module_samtools'], ['samtools_view_filter', 'module_bedtools']], 
+                command = cmd,
+                name = "samtools_view_filter." + sample.name
+                )
+
             job.samples = [sample.name]
             jobs.append(job)
         
