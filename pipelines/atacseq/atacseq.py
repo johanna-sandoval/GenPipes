@@ -44,6 +44,7 @@ from bfx import samtools
 from bfx import macs2
 from bfx import bowtie2
 from bfx import samtools
+from bfx import tagAlign
 
 
 log = logging.getLogger(__name__)
@@ -72,13 +73,10 @@ class AtacSeq(chipseq.ChipSeq):
                 'trim_output_directory': 'trim',
                 'report_output_directory': 'report',
                 'metrics_output_directory': 'metrics',
-                'homer_output_directory': 'tags',
-                'graphs_output_directory': 'graphs',
+                'tagAlign_output_directory': 'tagAlign',
                 'tracks_output_directory': 'tracks',
                 'macs_output_directory': 'peak_call',
-                'anno_output_directory': 'annotation',
-                'ihecA_output_directory': 'ihec_alignment',
-                'ihecM_output_directory': 'ihec_metrics'
+                'anno_output_directory': 'annotation'
                 }
         return dirs
 
@@ -183,6 +181,9 @@ class AtacSeq(chipseq.ChipSeq):
 
 
     def samtools_sort_index(self):
+        """
+        Sorts and indexes bam file
+        """
         jobs = []
         for sample in self.samples:
             sample_prefix = os.path.join(self.output_dirs['alignment_output_directory'], sample.name, sample.name)
@@ -222,6 +223,9 @@ class AtacSeq(chipseq.ChipSeq):
 
 
     def samtools_view_filter(self):
+        """
+        Bam is filtered for unmapped, not primary alignment, reads failing platform, duplicates, low quality mappings, as well as mitochondrial reads and blacklisted regions.
+        """
         jobs = []
         for sample in self.samples:
             sample_prefix = os.path.join(self.output_dirs['alignment_output_directory'], sample.name, sample.name)
@@ -281,6 +285,44 @@ class AtacSeq(chipseq.ChipSeq):
         return jobs
 
 
+    def tagAlign(self):
+        """
+        Bam is converted to a tagAlign file using bedtools
+        """
+        jobs = []
+        for sample in self.samples:
+            sample_prefix = os.path.join(self.output_dirs['tagAlign_output_directory'], sample.name, sample.name)
+            input_bam = os.path.join(self.output_dirs['alignment_output_directory'], sample.name, sample.name +  ".merged.sorted.dup.filtered.bam")
+            tagAlign_output = sample_prefix + ".tagAlign.gz"
+            bedpe = sample_prefix + ".bedpe.gz"
+            nSortedBam = os.path.join(self.output_dirs['alignment_output_directory'], sample.name, sample.name +  ".merged.sorted.dup.filtered.NameSorted")
+            num_reads = config.param('tagAlign', 'subSample_Reads', type = 'int')
+            subSampled_output = sample_prefix + ".subSample." + str(num_reads/1000000) + ".tagAlign.gz"
+
+            if self.run_type == "PAIRED_END":
+
+                ## need name sorted bam
+                job_samtoolsNameSort = samtools.sort(input_bam, nSortedBam, True)
+                job_samtoolsNameSort.name = "tagAlign.samtoolsNameSort." + sample.name
+                job_samtoolsNameSort.sample = [sample]
+                jobs.append(job_samtoolsNameSort)
+
+                job_TA = tagAlign.tagAlign_PE(nSortedBam + ".bam", bedpe, tagAlign_output, sample.name)
+                job_subsample = tagAlign.tagAlign_subsample(bedpe, subSampled_output, num_reads, "PE", sample.name)
+
+            else:
+                job_TA = tagAlign.tagAlign_subsample(input_bam, tagAlign_output, sample.name)
+                job_subsample = tagAlign.tagAlign_subsample(tagAlign_output, subSampled_output, num_reads, "SE", sample.name)
+            
+            job_TA.name = "tagAlign.create." + sample.name
+            job_TA.samples = [sample.name]
+            job_subsample.name = "tagAlign.subsample." + sample.name
+            job_subsample.samples = [sample.name]
+            jobs.extend([job_TA, job_subsample])
+        
+        return jobs
+
+
     @property
     def steps(self):
         return [
@@ -292,7 +334,8 @@ class AtacSeq(chipseq.ChipSeq):
             self.samtools_merge_bams,
             self.samtools_sort_index,
             self.picard_mark_duplicates,
-            self.samtools_view_filter
+            self.samtools_view_filter,
+            self.tagAlign
         ]
 
 if __name__ == '__main__':
