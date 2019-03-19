@@ -44,7 +44,7 @@ from bfx import samtools
 from bfx import macs2
 from bfx import bowtie2
 from bfx import samtools
-from bfx import tagAlign
+from bfx import atac
 
 
 log = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ class AtacSeq(chipseq.ChipSeq):
     def output_dirs(self):
         dirs = {'alignment_output_directory': 'alignment',
                 'trim_output_directory': 'trim',
-                'report_output_directory': 'report',
+                'pseudo_replicates_output_directory': 'pseudo_replicates',
                 'metrics_output_directory': 'metrics',
                 'tagAlign_output_directory': 'tagAlign',
                 'tracks_output_directory': 'tracks',
@@ -307,12 +307,12 @@ class AtacSeq(chipseq.ChipSeq):
                 job_samtoolsNameSort.sample = [sample]
                 jobs.append(job_samtoolsNameSort)
 
-                job_TA = tagAlign.tagAlign_PE(nSortedBam + ".bam", bedpe, tagAlign_output, sample.name)
-                job_subsample = tagAlign.tagAlign_subsample(bedpe, subSampled_output, num_reads, "PE", sample.name)
+                job_TA = atac.tagAlign_PE(nSortedBam + ".bam", bedpe, tagAlign_output, sample.name)
+                job_subsample = atac.tagAlign_subsample(bedpe, subSampled_output, num_reads, "PE", sample.name)
 
             else:
-                job_TA = tagAlign.tagAlign_subsample(input_bam, tagAlign_output, sample.name)
-                job_subsample = tagAlign.tagAlign_subsample(tagAlign_output, subSampled_output, num_reads, "SE", sample.name)
+                job_TA = atac.tagAlign_SE(input_bam, tagAlign_output, sample.name)
+                job_subsample = atac.tagAlign_subsample(tagAlign_output, subSampled_output, num_reads, "SE", sample.name)
             
             job_TA.name = "tagAlign.create." + sample.name
             job_TA.samples = [sample.name]
@@ -321,6 +321,51 @@ class AtacSeq(chipseq.ChipSeq):
             jobs.extend([job_TA, job_subsample])
         
         return jobs
+
+
+    # def metrics(self):
+    #     """
+    #     calculates ATAC-Seq metrics based on ENCODE stanards
+    #     """
+    #     jobs = []
+    #     for sample in self.samples:
+    #         sample_prefix = os.path.join(self.output_dirs['metrics_output_directory'], sample.name, sample.name)
+    #         num_reads = config.param('tagAlign', 'subSample_Reads', type = 'int')
+    #         other = config.param('metrics', 'threads', required = False)
+    #         threads = config.param('metrics', 'other_options', type = 'int', required = False)
+    #         subSampled_TA = os.path.join(self.output_dirs['tagAlign_output_directory'], sample.name, sample.name + ".subSample." + str(num_reads/1000000) + ".tagAlign.gz")
+
+    #         xcor_plot_output = sample_prefix + ".cc.plot.pdf"
+    #         xcor_score_output = sample_prefix + ".cc.qc"
+    #         job_xcor = atac.cross_correlation(subSampled_TA, xcor_score_output, xcor_plot_output, other, sample.name, threads)
+    #         job_xcor.name = "metrics.xcor." + sample.name
+    #         job_xcor.samples = [sample.name]
+
+
+
+    def pseudo_replicates(self):
+        """
+        Creates two pseudo replicates per samples
+        """
+        jobs = []
+        for sample in self.samples:
+            sample_prefix = os.path.join(self.output_dirs['pseudo_replicates_output_directory'], sample.name, sample.name)
+            tagAlign_input = os.path.join(self.output_dirs['tagAlign_output_directory'], sample.name, sample.name + ".tagAlign.gz")
+            bedpe = os.path.join(self.output_dirs['tagAlign_output_directory'], sample.name, sample.name + ".bedpe.gz")
+            pseudoR1 = os.path.join(self.output_dirs['tagAlign_output_directory'], sample.name, sample.name + ".pr1.tagAlign.gz")
+            pseudoR2 = os.path.join(self.output_dirs['tagAlign_output_directory'], sample.name, sample.name + ".pr2.tagAlign.gz")
+            
+            if self.run_type == "PAIRED_END":
+                job = atac.spr_PE(sample_prefix + ".", tagAlign_input, pseudoR1, pseudoR2, sample.name)
+            else:
+                job = atac.spr_SE(sample_prefix + ".", tagAlign_input, pseudoR1, pseudoR2, sample.name)
+            
+            job.name = "pseudo_replicates." + sample.name
+            job.samples = [sample.name]
+            jobs.append(job)
+
+        return jobs
+
 
 
     @property
@@ -335,7 +380,8 @@ class AtacSeq(chipseq.ChipSeq):
             self.samtools_sort_index,
             self.picard_mark_duplicates,
             self.samtools_view_filter,
-            self.tagAlign
+            self.tagAlign,
+            self.pseudo_replicates
         ]
 
 if __name__ == '__main__':
