@@ -47,6 +47,7 @@ from bfx import picard
 from bfx import trimmomatic
 from bfx import variantBam
 from bfx import samtools
+from bfx import sambamba
 from bfx import rmarkdown
 from bfx import jsonator
 from bfx import bash_cmd as bash
