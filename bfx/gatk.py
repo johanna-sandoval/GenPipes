@@ -31,6 +31,8 @@ from . import picard2
 
 config = core.config.config
 
+config = core.config.config
+
 def base_recalibrator(input, output, intervals):
     if intervals:
         inputs = [input, intervals]
