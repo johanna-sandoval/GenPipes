@@ -563,7 +563,6 @@ END
                 )
         return jobs
 
-<<<<<<< HEAD
     def picard_merge_sam_files(self):
         """
         BAM readset files are merged into one file per sample. Merge is done using [Sambamba](http://lomereiter.github.io/sambamba/index.html).
@@ -635,8 +634,6 @@ END
 
         return jobs
 
-=======
->>>>>>> 8610b644 (DNA-Seq Pipeline - Moving picard_merge_sam_files function to common.py)
     def gatk_indel_realigner(self):
         """
         Insertion and deletion realignment is performed on regions where multiple base mismatches
