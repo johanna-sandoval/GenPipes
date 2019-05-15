@@ -53,11 +53,10 @@ from bfx import fgbio
 from bfx import metrics
 
 from pipelines import common
-from pipelines.dnaseq import dnaseq
 
 log = logging.getLogger(__name__)
 
-class MethylSeq(dnaseq.DnaSeqRaw):
+class MethylSeq(common.Illumina):
     """
     Methyl-Seq Pipeline
     ================
