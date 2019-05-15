@@ -22,8 +22,6 @@
 # MUGQIC Modules
 from core.config import *
 from core.job import *
-import gatk4
-import picard2
 
 def sort(input_bam,
          output_bam,
