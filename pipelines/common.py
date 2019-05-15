@@ -560,6 +560,7 @@ pandoc \\
             job.samples = [sample]
             job.removable_files = input_bam
 
+
             jobs.append(job)
 
         return jobs
