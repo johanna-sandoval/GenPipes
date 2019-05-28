@@ -39,6 +39,7 @@ from bfx.readset import parse_illumina_readset_file
 
 from bfx import bvatools
 from bfx import bismark
+from bfx import gem3
 from bfx import picard2 as picard
 from bfx import bedtools
 from bfx import samtools
@@ -215,6 +216,114 @@ pandoc --to=markdown \\
 
         return jobs
     
+    def gem3_align(self):
+        """
+        Align reads with Gem3
+        """
+
+        jobs = []
+        for readset in self.readsets:
+            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + ".trim.")
+            alignment_directory = os.path.join("alignment", readset.sample.name)
+            # no_readgroup_sam = os.path.join(alignment_directory, readset.name, readset.name + ".sorted_noRG.sam")
+            no_readgroup_bam = os.path.join(alignment_directory, readset.name, readset.name + ".sorted_noRG.bam")
+            # output_sam = re.sub("_noRG.sam", ".sam", no_readgroup_sam)
+            output_bam = re.sub("_noRG.bam", ".bam", no_readgroup_bam)
+
+            # Find input readset FASTQs first from previous trimmomatic job, then from original FASTQs in the readset sheet
+            if readset.run_type == "PAIRED_END":
+                candidate_input_files = [[trim_file_prefix + "pair1.fastq.gz", trim_file_prefix + "pair2.fastq.gz"]]
+                if readset.fastq1 and readset.fastq2:
+                    candidate_input_files.append([readset.fastq1, readset.fastq2])
+                if readset.bam:
+                    candidate_input_files.append([re.sub("\.bam$", ".pair1.fastq.gz", readset.bam), re.sub("\.bam$", ".pair2.fastq.gz", readset.bam)])
+                [fastq1, fastq2] = self.select_input_files(candidate_input_files)
+            elif readset.run_type == "SINGLE_END":
+                candidate_input_files = [[trim_file_prefix + "single.fastq.gz"]]
+                if readset.fastq1:
+                    candidate_input_files.append([readset.fastq1])
+                if readset.bam:
+                    candidate_input_files.append([re.sub("\.bam$", ".single.fastq.gz", readset.bam)])
+                [fastq1] = self.select_input_files(candidate_input_files)
+                fastq2 = None
+            else:
+                raise Exception("Error: run type \"" + readset.run_type +
+                "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!")
+
+            gem3_out_report =  os.path.join(alignment_directory, readset.name, re.sub(r'(\.fastq\.gz|\.fq\.gz|\.fastq|\.fq)$', "_noRG_gem3_PE_report.txt", os.path.basename(fastq1)))
+
+            jobs.append(
+                concat_jobs([
+                    Job(command="mkdir -p " + os.path.dirname(output_bam), samples=[readset.sample]),
+                    pipe_jobs([
+                        gem3.align(
+                            fastq1,
+                            fastq2,
+                            "",
+                            gem3_out_report
+                        ),
+                        sambamba.view(
+                            "/dev/stdin",
+                            "/dev/stdout",
+                            config.param('gem3_align', 'sambamba2bam')
+                        ),
+                        sambamba.sort(
+                            "/dev/stdin",
+                            no_readgroup_bam,
+                            config.param('gem3_align', 'tmp_dir')
+                        )
+                    ]),
+                ], name="gem3_align." + readset.name)
+            )
+            jobs.append(
+                concat_jobs([
+                    Job(command="mkdir -p " + alignment_directory, samples=[readset.sample]),
+                    picard.add_read_groups(
+                        no_readgroup_bam,
+                        output_bam,
+                        readset.name,
+                        readset.library if readset.library else readset.sample.name,
+                        readset.run + "_" + readset.lane,
+                        readset.sample.name
+                    )
+                ], name="picard_add_read_groups." + readset.name)
+            )
+            jobs.append(
+                concat_jobs([
+                    Job(command="mkdir -p " + alignment_directory, samples=[readset.sample]),
+                    sambamba.flagstat(
+                        output_bam,
+                        re.sub(".bam", "_flagstat.txt", output_bam),
+                        ""
+                    )
+                ], name="sambamba_flagstat." + readset.name)
+            )
+
+        report_file = os.path.join("report", "MethylSeq.gem3_align.md")
+        jobs.append(
+            Job(
+                [os.path.join("alignment", readset.sample.name, readset.name, readset.name + ".sorted.bam") for readset in self.readsets],
+                [report_file],
+                [['gem3_align', 'module_pandoc']],
+                command="""\
+mkdir -p report && \\
+pandoc --to=markdown \\
+  --template {report_template_dir}/{basename_report_file} \\
+  --variable scientific_name="{scientific_name}" \\
+  --variable assembly="{assembly}" \\
+  {report_template_dir}/{basename_report_file} \\
+  > {report_file}""".format(
+                    scientific_name=config.param('gem3_align', 'scientific_name'),
+                    assembly=config.param('gem3_align', 'assembly'),
+                    report_template_dir=self.report_template_dir,
+                    basename_report_file=os.path.basename(report_file),
+                    report_file=report_file
+                ),
+                report_files=[report_file],
+                name="gem3_align_report")
+        )
+
+        return jobs
     
     def add_bam_umi(self):
         """
@@ -942,7 +1051,8 @@ pandoc \\
             self.picard_sam_to_fastq,
             self.trimmomatic,
             self.merge_trimmomatic_stats,
-            self.bismark_align,
+            self.gem3_align,
+            # self.bismark_align,
             self.add_bam_umi,               # step 5
             self.sambamba_merge_sam_files,
             self.picard_remove_duplicates,
