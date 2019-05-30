@@ -47,6 +47,7 @@ All analysis parameters are described in this [configuration file](config.ini).
 [UNITE]: https://unite.ut.ee/repository.php
 [BISMARK]: https://www.bioinformatics.babraham.ac.uk/projects/bismark/
 [spp]: https://github.com/kundajelab/phantompeakqualtools
+[GEM3]: https://github.com/smarco/gem3-mapper
 
 ---
 references:
@@ -1150,5 +1151,23 @@ references:
   issued:
     year: 2012
                                    
-...
+- id: gem3
+  title: 'The GEM mapper: fast, accurate and versatile alignment by filtration'
+  author:
+    - family: Marco-Sola
+      given: Santiago
+    - family: Sammeth
+      given: Michael
+    - family: Guigó
+      given: Roderic
+    - family: Ribeca
+      given: Paolo
+  container-title: Nature Methods
+  volume: 9
+  URL: 'https://www.nature.com/articles/nmeth.2221'
+  DOI: 10.1038/nmeth.2221
+  page: 1185-1188
+  type: article-journal
+  issued:
+    year: 2012
 
