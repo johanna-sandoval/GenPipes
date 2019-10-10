@@ -3,7 +3,7 @@
 set -eu -o pipefail
 
 SOFTWARE=fastqc
-VERSION=0.11.6.devel
+VERSION=0.11.8
 #VERSION=0.11.5
 ARCHIVE=$SOFTWARE-$VERSION.zip
 ARCHIVE_URL=http://www.bioinformatics.babraham.ac.uk/projects/fastqc/fastqc_v${VERSION}.zip
