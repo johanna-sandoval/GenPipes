@@ -40,7 +40,7 @@ def deseq(
             ['differential_expression_deseq', 'module_R']
         ],
         command="""\
-Rscript $R_TOOLS/deseq.R \\
+Rscript $R_TOOLS/deseq2.R \\
   -d {design_file} \\
   -c {count_matrix} \\
   -o {output_dir} \\
