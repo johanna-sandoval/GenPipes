@@ -455,8 +455,6 @@ def haplotype_caller(
 #added interval_padding as a varibale. Because in chipseq we don't need to add any padding to the peaks
     if not isinstance(inputs, list):
         inputs = [inputs]
-    if interval_list:
-        inputs.append(interval_list)
 
     # Added this to check intervel_list (peak file) availability in the chip-seq pipeline
     inputs_list = inputs.copy()
