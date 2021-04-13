@@ -377,7 +377,7 @@ class Pipeline(object):
 
                 log.debug("Job name: " + job.name)
                 log.debug("Job input files:\n  " + "\n  ".join(job.input_files))
-                log.debug("Job output files:\n  " + "\n  ".join(job.output_files) + "\n")
+                log.debug("Job output files:\n  " + "\n  ".join(job.output_files))
 
                 # Job .done file name contains the command checksum.
                 # Thus, if the command is modified, the job is not up-to-date anymore.
