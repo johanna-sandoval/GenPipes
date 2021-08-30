@@ -450,7 +450,7 @@ pandoc --to=markdown \\
 
         return jobs
 
-    def sambamba_mark_duplicates(self):
+    def picard_mark_duplicates(self):
         """
         Mark duplicates. Aligned reads per sample are duplicates if they have the same 5' alignment positions
         (for both mates in the case of paired-end reads). All but the best pair (based on alignment score)
@@ -469,47 +469,8 @@ pandoc --to=markdown \\
                 output,
                 metrics_file
             )
-            job.name = "sambamba_mark_duplicates." + sample.name
-            jobs.append(job)
-
-        return jobs
-
-    def picard_mark_duplicates(self):
-        """
-        Mark duplicates. Aligned reads per sample are duplicates if they have the same 5' alignment positions
-        (for both mates in the case of paired-end reads). All but the best pair (based on alignment score)
-        ill be marked as a duplicate in the BAM file. Marking duplicates is done using [Picard](http://broadinstitute.github.io/picard/).
-        """
-
-        jobs = []
-        for sample in self.samples:
-            alignment_file_prefix = os.path.join("alignment", sample.name, sample.name + ".")
-            input = alignment_file_prefix + "sorted.bam"
-            output = alignment_file_prefix + "sorted.dup.bam"
-            metrics_file = alignment_file_prefix + "sorted.dup.metrics"
-
-            job = picard.mark_duplicates([input], output, metrics_file)
             job.name = "picard_mark_duplicates." + sample.name
-            job.samples = [sample]
             jobs.append(job)
-
-            report_file = os.path.join("report", "DnaSeq.picard_mark_duplicates.md")
-            jobs.append(
-                Job(
-                    [os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam") for sample in self.samples],
-                    [report_file],
-                    command="""\
-    mkdir -p report && \\
-    cp \\
-      {report_template_dir}/{basename_report_file} \\
-      {report_file}""".format(
-                        report_template_dir=self.report_template_dir,
-                        basename_report_file=os.path.basename(report_file),
-                        report_file=report_file
-                    ),
-                    report_files=[report_file],
-                    name="picard_mark_duplicates_report")
-            )
 
         return jobs
 
@@ -849,7 +810,7 @@ pandoc --to=markdown \\
         those regions properly. Realignment is done using [GATK](https://www.broadinstitute.org/gatk/).
         The reference genome is divided by a number regions given by the `nb_jobs` parameter.
         """
-
+        
         jobs = []
     
         nb_jobs = config.param('gatk_indel_realigner', 'nb_jobs', type='posint')
@@ -1634,6 +1595,65 @@ pandoc --to=markdown \\
     
         return jobs
 
+    def estimate_ribosomal_rna(self):
+        """
+        Use bwa mem to align reads on the rRNA reference fasta and count the number of read mapped
+        The filtered reads are aligned to a reference fasta file of ribosomal sequence. The alignment is done per sequencing readset.
+        The alignment software used is [BWA](http://bio-bwa.sourceforge.net/) with algorithm: bwa mem.
+        BWA output BAM files are then sorted by coordinate using [Picard](http://broadinstitute.github.io/picard/).
+
+        This step takes as input files:
+
+        readset Bam files
+        """
+    
+        jobs = []
+        for readset in self.readsets:
+            readset_bam = os.path.join("alignment", readset.sample.name, readset.name, "Aligned.sortedByCoord.out.bam")
+            output_folder = os.path.join("metrics", readset.sample.name, readset.name)
+            readset_metrics_bam = os.path.join(output_folder, readset.name + "rRNA.bam")
+        
+            job = concat_jobs([
+                Job(command="mkdir -p " + os.path.dirname(readset_bam) + " " + output_folder),
+                pipe_jobs([
+                    bvatools.bam2fq(
+                        readset_bam
+                    ),
+                    bwa.mem(
+                        "/dev/stdin",
+                        None,
+                        read_group="'@RG" + \
+                                   "\tID:" + readset.name + \
+                                   "\tSM:" + readset.sample.name + \
+                                   ("\tLB:" + readset.library if readset.library else "") + \
+                                   (
+                                       "\tPU:run" + readset.run + "_" + readset.lane if readset.run and readset.lane else "") + \
+                                   ("\tCN:" + config.param('bwa_mem_rRNA', 'sequencing_center') if config.param(
+                                       'bwa_mem_rRNA', 'sequencing_center', required=False) else "") + \
+                                   "\tPL:Illumina" + \
+                                   "'",
+                        ref=config.param('bwa_mem_rRNA', 'ribosomal_fasta'),
+                        ini_section='bwa_mem_rRNA'
+                    ),
+                    picard.sort_sam(
+                        "/dev/stdin",
+                        readset_metrics_bam,
+                        "coordinate",
+                        ini_section='picard_sort_sam_rrna'
+                    )
+                ]),
+                tools.py_rrnaBAMcount(
+                    bam=readset_metrics_bam,
+                    gtf=config.param('bwa_mem_rRNA', 'gtf'),
+                    output=os.path.join(output_folder, readset.name + "rRNA.stats.tsv"),
+                    typ="transcript")], name="bwa_mem_rRNA." + readset.name)
+        
+            job.removable_files = [readset_metrics_bam]
+            job.samples = [readset.sample]
+            jobs.append(job)
+            
+        return jobs
+
     def wiggle(self):
         """
         Generate wiggle tracks suitable for multiple browsers.
@@ -2333,6 +2353,9 @@ done""".format(
                 self.gatk_haplotype_caller,
                 self.merge_hc_vcf,
                 self.variant_filtration,
+                self.decompose_and_normalize,
+                self.compute_snp_effects,
+                self.gemini_annotations,
                 self.run_star_fusion,
                 self.run_discasm_gmap_fusion,
                 self.run_star_seqr,
@@ -2345,16 +2368,6 @@ done""".format(
                 self.wiggle,
                 self.raw_counts,
                 self.raw_counts_metrics,
-                self.cufflinks,
-                self.cuffmerge,
-                self.cuffquant,
-                self.cuffdiff,
-                self.cuffnorm,
-                self.fpkm_correlation_matrix,
-                self.gq_seq_utils_exploratory_analysis_rnaseq,
-                self.differential_expression,
-                self.differential_expression_goseq,
-                self.ihec_metrics,
                 self.cram_output
             ]
         ]
