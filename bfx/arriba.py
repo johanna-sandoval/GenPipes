@@ -43,13 +43,17 @@ $ARRIBA_HOME/./run_arriba.sh \\
       {gene_annot} \\
       {reference} \\
       {blacklist} \\
+      {known_fusions} \\
+      {protein_domains} \\
+      {threads} \\
       {fastq1} \\
-      {fastq2} \\
-      {threads}""".format(
+      {fastq2}""".format(
             genome_build=config.param('run_arriba', 'genome_build'),
             gene_annot=config.param('run_arriba', 'gene_annot'),
             reference=config.param('run_arriba', 'reference'),
             blacklist=config.param('run_arriba', 'blacklist'),
+            known_fusions=config.param('run_arriba', 'known_fusions'),
+            protein_domains=config.param('run_arriba', 'protein_domains'),
             threads=config.param('run_arriba', 'threads', type='posint'),
             options=config.param('run_arriba', 'options'),
             fastq1=",".join(fastq1 for fastq1 in fastqs1),
