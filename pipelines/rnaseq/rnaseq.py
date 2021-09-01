@@ -368,27 +368,6 @@ pandoc --to=markdown \\
 
         return jobs
 
-
-    def sambamba_merge_sam_files(self):
-        """
-        BAM readset files are merged into one file per sample. Merge is done using [Sambamba] (http://lomereiter.github.io/sambamba/docs/sambamba-merge.html).
-        """
-
-        jobs = []
-        for sample in self.samples:
-            # Skip samples with one readset only, since symlink has been created at align step
-            if len(sample.readsets) > 1:
-                alignment_directory = os.path.join("alignment", sample.name)
-                inputs = [os.path.join(alignment_directory, readset.name, "Aligned.sortedByCoord.out.bam") for readset in sample.readsets]
-                output = os.path.join(alignment_directory, sample.name + ".sorted.bam")
-
-                job = sambamba.merge(inputs, output)
-                job.name = "sambamba_merge_sam_files." + sample.name
-                jobs.append(job)
-
-        return jobs
-
-
     def picard_merge_sam_files(self):
         """
         BAM readset files are merged into one file per sample. Merge is done using [Picard](http://broadinstitute.github.io/picard/).
@@ -482,8 +461,6 @@ pandoc --to=markdown \\
             input = os.path.join("alignment", sample.name, sample.name + ".sorted.dup.bam")
             output_dir = os.path.join(fastqc_directory)
             output = os.path.join(fastqc_directory, sample.name + ".sorted.dup_fastqc.zip")
-
-            mkdir_job = Job(command="mkdir -p " + output_dir, removable_files=[output_dir])
 
             adapter_file = config.param('fastqc', 'adapter_file', required=False, type='filepath')
             adapter_job = None
@@ -1635,7 +1612,7 @@ pandoc --to=markdown \\
                         ref=config.param('bwa_mem_rRNA', 'ribosomal_fasta'),
                         ini_section='bwa_mem_rRNA'
                     ),
-                    picard.sort_sam(
+                    gatk4.sort_sam(
                         "/dev/stdin",
                         readset_metrics_bam,
                         "coordinate",
@@ -1686,7 +1663,7 @@ pandoc --to=markdown \\
                 bam_f_job = concat_jobs([
                     samtools.view(input_bam, input_bam_f1, "-bh -F 256 -f 81"),
                     samtools.view(input_bam, input_bam_f2, "-bh -F 256 -f 161"),
-                    picard.merge_sam_files([input_bam_f1, input_bam_f2], output_bam_f),
+                    gatk4.merge_sam_files([input_bam_f1, input_bam_f2], output_bam_f),
                     Job(command="rm " + input_bam_f1 + " " + input_bam_f2)
                 ], name="wiggle." + sample.name + ".forward_strandspec")
                 bam_f_job.samples = [sample]
@@ -1698,7 +1675,7 @@ pandoc --to=markdown \\
                     Job(command="mkdir -p " + os.path.join("tracks", sample.name) + " " + os.path.join("tracks", "bigWig")),
                     samtools.view(input_bam, input_bam_r1, "-bh -F 256 -f 97"),
                     samtools.view(input_bam, input_bam_r2, "-bh -F 256 -f 145"),
-                    picard.merge_sam_files([input_bam_r1, input_bam_r2], output_bam_r),
+                    gatk4.merge_sam_files([input_bam_r1, input_bam_r2], output_bam_r),
                     Job(command="rm " + input_bam_r1 + " " + input_bam_r2)
                 ], name="wiggle." + sample.name + ".reverse_strandspec")
                 bam_r_job.samples = [sample]
@@ -2342,8 +2319,8 @@ done""".format(
                 self.picard_sam_to_fastq,
                 self.skewer_trimming,
                 self.star,
-                self.sambamba_merge_sam_files,
-                self.sambamba_sort_sam,
+                self.picard_merge_sam_files,
+                self.picard_sort_sam,
                 self.picard_mark_duplicates,
                 self.split_N_trim,
                 self.sambamba_merge_splitNtrim_files,
@@ -2357,17 +2334,14 @@ done""".format(
                 self.compute_snp_effects,
                 self.gemini_annotations,
                 self.run_star_fusion,
-                self.run_discasm_gmap_fusion,
-                self.run_star_seqr,
                 self.run_arriba,
-                self.fusion_annotation,
                 self.picard_rna_metrics,
                 self.estimate_ribosomal_rna,
-                self.bam_hard_clip,
                 self.rnaseqc,
                 self.wiggle,
                 self.raw_counts,
                 self.raw_counts_metrics,
+                self.ihec_metrics,
                 self.cram_output
             ]
         ]
