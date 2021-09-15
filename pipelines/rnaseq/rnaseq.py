@@ -48,7 +48,6 @@ from bfx import gq_seq_utils
 from bfx import htseq
 from bfx import metrics
 from bfx import fastqc
-from bfx import picard
 from bfx import samtools
 from bfx import bvatools
 from bfx import rmarkdown
@@ -62,14 +61,18 @@ from bfx import htslib
 from bfx import vt
 from bfx import gemini
 from bfx import snpeff
+from bfx import vcfanno
 from bfx import star_fusion
 from bfx import star_seqr
 from bfx import arriba
+from bfx import annoFuse
 from bfx import discasm
 from bfx import gmap_fusion
 from bfx import fusionmetacaller
 from bfx import fusioninspector
 from bfx import star
+
+from bfx import bash_cmd as bash
 
 log = logging.getLogger(__name__)
 
@@ -377,7 +380,10 @@ pandoc --to=markdown \\
                 inputs = [os.path.join(alignment_directory, readset.name, "Aligned.sortedByCoord.out.bam") for readset in sample.readsets]
                 output = os.path.join(alignment_directory, sample.name + ".sorted.bam")
 
-                job = gatk4.merge_sam_files(inputs, output)
+                job = gatk4.merge_sam_files(
+                    inputs,
+                    output
+                )
                 job.name = "picard_merge_sam_files." + sample.name
                 job.samples = [sample]
                 jobs.append(job)
@@ -414,10 +420,14 @@ pandoc --to=markdown \\
         for sample in self.samples:
             alignment_file_prefix = os.path.join("alignment", sample.name, sample.name + ".")
             input = alignment_file_prefix + "sorted.bam"
-            output = alignment_file_prefix + "sorted.dup.bam"
-            metrics_file = alignment_file_prefix + "sorted.dup.metrics"
+            output = alignment_file_prefix + "sorted.mdup.bam"
+            metrics_file = alignment_file_prefix + "sorted.mdup.metrics"
 
-            job = gatk4.mark_duplicates([input], output, metrics_file)
+            job = gatk4.picard_mark_duplicates(
+                [input],
+                output,
+                metrics_file
+            )
             job.name = "picard_mark_duplicates." + sample.name
             job.samples = [sample]
             jobs.append(job)
@@ -425,7 +435,7 @@ pandoc --to=markdown \\
             report_file = os.path.join("report", "DnaSeq.picard_mark_duplicates.md")
             jobs.append(
                 Job(
-                    [os.path.join("alignment", sample.name, sample.name + ".sorted.dup.bam") for sample in self.samples],
+                    [os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam") for sample in self.samples],
                     [report_file],
                     command="""\
     mkdir -p report && \\
@@ -447,11 +457,9 @@ pandoc --to=markdown \\
         jobs = []
         for sample in self.samples:
             fastqc_directory = os.path.join("metrics", "rna", sample.name, "fastqc")
-            input = os.path.join("alignment", sample.name, sample.name + ".sorted.dup.bam")
+            input = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam")
             output_dir = os.path.join(fastqc_directory)
-            output = os.path.join(fastqc_directory, sample.name + ".sorted.dup_fastqc.zip")
-
-            mkdir_job = Job(command="mkdir -p " + output_dir, removable_files=[output_dir])
+            output = os.path.join(fastqc_directory, sample.name + ".sorted.mdup_fastqc.zip")
 
             adapter_file = config.param('fastqc', 'adapter_file', required=False, type='filepath')
             adapter_job = None
@@ -461,9 +469,18 @@ pandoc --to=markdown \\
                 adapter_file = os.path.join(output_dir, "adapter.tsv")
 
             jobs.append(concat_jobs([
-                mkdir_job,
+                bash.mkdir(
+                    output_dir,
+                    remove=True
+                ),
                 adapter_job,
-                fastqc.fastqc(input, None, output_dir, output, adapter_file),
+                fastqc.fastqc(
+                    input,
+                    None,
+                    output_dir,
+                    output,
+                    adapter_file
+                ),
             ], name="fastqc." + sample.name))
 
         return jobs
@@ -477,13 +494,28 @@ pandoc --to=markdown \\
         jobs = []
         reference_file = config.param('picard_rna_metrics', 'genome_fasta', type='filepath')
         for sample in self.samples:
-            alignment_file = os.path.join("alignment", sample.name, sample.name + ".sorted.dup.split.realigned.recal.bam")
+            alignment_file = os.path.join(
+                "alignment",
+                sample.name,
+                sample.name
+                + ".sorted.mdup.split.realigned.recal.bam"
+            )
             output_directory = os.path.join("metrics", sample.name)
 
             job = concat_jobs([
-                Job(command="mkdir -p " + output_directory, removable_files=[output_directory]),
-                    gatk4.collect_multiple_metrics(alignment_file, os.path.join(output_directory, sample.name), reference_file),
-                    gatk4.collect_rna_metrics(alignment_file, os.path.join(output_directory, sample.name + ".picard_rna_metrics"))
+                bash.mkdir(
+                    output_directory,
+                    remove=True
+                ),
+                    gatk4.collect_multiple_metrics(
+                        alignment_file,
+                        os.path.join(output_directory, sample.name),
+                        reference_file
+                    ),
+                    gatk4.collect_rna_metrics(
+                        alignment_file,
+                        os.path.join(output_directory, sample.name + ".picard_rna_metrics")
+                    )
                 ], name="picard_rna_metrics." + sample.name)
 
             jobs.append(job)
@@ -630,9 +662,14 @@ pandoc --to=markdown \\
         
             if nb_jobs == 1:
                 job = concat_jobs([
-                    Job(command="mkdir -p " + alignment_dir),
-                    gatk.split_n_cigar_reads(alignment_file_prefix + "sorted.mdup.bam",
-                                             split_file_prefix + "sorted.mdup.split.bam"),
+                    bash.mkdir(
+                        split_dir,
+                        remove=True
+                    ),
+                    gatk4.split_n_cigar_reads(
+                        alignment_file_prefix + "sorted.mdup.bam",
+                        split_file_prefix + "sorted.mdup.split.bam"
+                    ),
                 ], name="gatk_split_N_trim." + sample.name)
                 job.samples = [sample]
                 jobs.append(job)
@@ -646,19 +683,29 @@ pandoc --to=markdown \\
                 for idx, sequences in enumerate(unique_sequences_per_job):
                     job = concat_jobs([
                         # Create output directory since it is not done by default by GATK tools
-                        Job(command="mkdir -p " + split_dir),
-                        gatk.split_n_cigar_reads(alignment_file_prefix + "sorted.mdup.bam",
-                                                 split_file_prefix + "sorted.mdup.split." + str(idx) + ".bam",
-                                                 intervals=sequences)
+                        bash.mkdir(
+                            split_dir,
+                            remove=True
+                        ),
+                        gatk4.split_n_cigar_reads(
+                            alignment_file_prefix + "sorted.mdup.bam",
+                            split_file_prefix + "sorted.mdup.split." + str(idx) + ".bam",
+                            intervals=sequences
+                        )
                     ], name="gatk_split_N_trim." + sample.name + "." + str(idx))
                     job.samples = [sample]
                     jobs.append(job)
             
                 job = concat_jobs([
-                    Job(command="mkdir -p " + alignment_dir),
-                    gatk.split_n_cigar_reads(alignment_file_prefix + "sorted.mdup.bam",
-                                             split_file_prefix + "sorted.mdup.split.others.bam",
-                                             exclude_intervals=unique_sequences_per_job_others)
+                    bash.mkdir(
+                        split_dir,
+                        remove=True
+                    ),
+                    gatk4.split_n_cigar_reads(
+                        alignment_file_prefix + "sorted.mdup.bam",
+                        split_file_prefix + "sorted.mdup.split.others.bam",
+                        exclude_intervals=unique_sequences_per_job_others
+                    )
                 ], name="gatk_split_N_trim." + sample.name + ".others")
                 job.samples = [sample]
                 jobs.append(job)
@@ -688,8 +735,16 @@ pandoc --to=markdown \\
             
                 inputs = []
                 for idx, sequences in enumerate(unique_sequences_per_job):
-                    inputs.append(os.path.join(split_file_prefix + "sorted.mdup.split." + str(idx) + ".bam"))
-                inputs.append(os.path.join(split_file_prefix + "sorted.mdup.split.others.bam"))
+                    inputs.append(
+                        os.path.join(
+                            split_file_prefix + "sorted.mdup.split." + str(idx) + ".bam"
+                        )
+                    )
+                inputs.append(
+                    os.path.join(
+                        split_file_prefix + "sorted.mdup.split.others.bam"
+                    )
+                )
             
                 job = sambamba.merge(inputs, output)
                 job.name = "sambamba_merge_splitNtrim_files." + sample.name
@@ -725,14 +780,34 @@ pandoc --to=markdown \\
                 output_bam = realign_prefix + ".bam"
                 sample_output_bam = os.path.join(alignment_directory, sample.name + ".sorted.mdup.split.realigned.bam")
                 job = concat_jobs([
-                    Job(command="mkdir -p " + realign_directory, removable_files=[realign_directory]),
-                    gatk.realigner_target_creator(input, realign_intervals),
-                    gatk.indel_realigner(input, output=output_bam, target_intervals=realign_intervals),
+                    bash.mkdir(
+                        realign_directory,
+                        remove=True
+                    ),
+                    gatk.realigner_target_creator(
+                        input,
+                        realign_intervals,
+                        output_dir=self.output_dir,
+                    ),
+                    gatk.indel_realigner(
+                        input,
+                        output=output_bam,
+                        target_intervals=realign_intervals,
+                        output_dir=self.output_dir,
+                    ),
                     # Create sample realign symlink since no merging is required
-                    Job([output_bam], [sample_output_bam], command="ln -s -f " + os.path.relpath(output_bam,
-                                                                                                 os.path.dirname(
-                                                                                                     sample_output_bam)) + " " + sample_output_bam)
-                ], name="gatk_indel_realigner." + sample.name)
+                    Job(
+                        [output_bam],
+                        [sample_output_bam],
+                        command="ln -s -f " +
+                                os.path.relpath(output_bam,
+                                                os.path.dirname(
+                                                    sample_output_bam
+                                                )
+                                                ) + " " + sample_output_bam
+                    )
+                ], name="gatk_indel_realigner." + sample.name
+                )
                 job.samples = [sample]
                 jobs.append(job)
         
@@ -752,10 +827,23 @@ pandoc --to=markdown \\
                     output_bam = realign_prefix + ".bam"
                     job = concat_jobs([
                         # Create output directory since it is not done by default by GATK tools
-                        Job(command="mkdir -p " + realign_directory, removable_files=[realign_directory]),
-                        gatk.realigner_target_creator(input, realign_intervals, intervals=intervals),
-                        gatk.indel_realigner(input, output=output_bam, target_intervals=realign_intervals,
-                                             intervals=intervals)
+                        bash.mkdir(
+                            realign_directory,
+                            remove=True
+                        ),
+                        gatk.realigner_target_creator(
+                            input,
+                            realign_intervals,
+                            intervals=intervals,
+                            output_dir=self.output_dir,
+                        ),
+                        gatk.indel_realigner(
+                            input,
+                            output=output_bam,
+                            target_intervals=realign_intervals,
+                            intervals=intervals,
+                            output_dir=self.output_dir,
+                        )
                     ], name="gatk_indel_realigner." + sample.name + "." + str(idx))
                     job.samples = [sample]
                     jobs.append(job)
@@ -766,11 +854,23 @@ pandoc --to=markdown \\
                 output_bam = realign_prefix + ".bam"
                 job = concat_jobs([
                     # Create output directory since it is not done by default by GATK tools
-                    Job(command="mkdir -p " + realign_directory, removable_files=[realign_directory]),
-                    gatk.realigner_target_creator(input, realign_intervals,
-                                                  exclude_intervals=unique_sequences_per_job_others),
-                    gatk.indel_realigner(input, output=output_bam, target_intervals=realign_intervals,
-                                         exclude_intervals=unique_sequences_per_job_others)
+                    bash.mkdir(
+                        realign_directory,
+                        remove=True
+                    ),
+                    gatk.realigner_target_creator(
+                        input,
+                        realign_intervals,
+                        exclude_intervals=unique_sequences_per_job_others,
+                        output_dir=self.output_dir,
+                    ),
+                    gatk.indel_realigner(
+                        input,
+                        output=output_bam,
+                        target_intervals=realign_intervals,
+                        exclude_intervals=unique_sequences_per_job_others,
+                        output_dir=self.output_dir,
+                    )
                 ], name="gatk_indel_realigner." + sample.name + ".others")
                 job.samples = [sample]
                 jobs.append(job)
@@ -942,6 +1042,29 @@ pandoc --to=markdown \\
     
         return jobs
 
+    def run_vcfanno(self):
+        """
+
+        """
+        
+        jobs = []
+    
+        for sample in self.samples:
+            input = os.path.join("alignment", sample.name, sample.name + ".hc.vcf.gz")
+            output = os.path.join("alignment", sample.name, sample.name + ".hc.rnaedit.vcf.gz")
+            
+            job = concat_jobs([
+                vcfanno.run(
+                    input,
+                    output,
+                )
+            ], name="run_vcfanno.rnaedit" + sample.name)
+            
+            job.samples = [sample]
+            jobs.append(job)
+
+        return jobs
+
     def variant_filtration(self):
         """
         GATK VariantFiltration.
@@ -954,11 +1077,12 @@ pandoc --to=markdown \\
         for sample in self.samples:
             input_file_prefix = os.path.join("alignment", sample.name, sample.name)
         
-            varflt_other_options = config.param('gatk_variant_filtration', 'other_options')
-        
             job = concat_jobs([
-                gatk.variant_filtration(input_file_prefix + ".hc.vcf.gz", input_file_prefix + ".hc.flt.vcf.gz",
-                                        varflt_other_options)
+                gatk.variant_filtration(
+                    input_file_prefix + ".hc.rnaedit.vcf.gz",
+                    input_file_prefix + ".hc.flt.vcf.gz",
+                    config.param('gatk_variant_filtration', 'other_options')
+                )
             ], name="gatk_variant_filtration." + sample.name)
             job.samples = [sample]
             jobs.append(job)
@@ -976,8 +1100,14 @@ pandoc --to=markdown \\
             input_file_prefix = os.path.join("alignment", sample.name, sample.name)
         
             job = pipe_jobs([
-                vt.decompose_and_normalize_mnps(input_file_prefix + ".hc.flt.vcf.gz", None),
-                htslib.bgzip_tabix(None, input_file_prefix + ".hc.flt.vt.vcf.gz"),
+                vt.decompose_and_normalize_mnps(
+                    input_file_prefix + ".hc.flt.vcf.gz",
+                    None
+                ),
+                htslib.bgzip_tabix(
+                    None,
+                    input_file_prefix + ".hc.flt.vt.vcf.gz"
+                ),
             ], name="decompose_and_normalize." + sample.name)
             job.samples = [sample]
             jobs.append(job)
@@ -994,11 +1124,15 @@ pandoc --to=markdown \\
             input_file_prefix = os.path.join("alignment", sample.name, sample.name)
         
             job = concat_jobs([
-                snpeff.compute_effects(input_file_prefix + ".hc.flt.vt.vcf.gz",
-                                       input_file_prefix + ".hc.flt.vt.snpeff.vcf",
-                                       options=config.param('compute_effects', 'options')),
-                htslib.bgzip_tabix(input_file_prefix + ".hc.flt.vt.snpeff.vcf",
-                                   input_file_prefix + ".hc.flt.vt.snpeff.vcf.gz"),
+                snpeff.compute_effects(
+                    input_file_prefix + ".hc.flt.vt.vcf.gz",
+                    input_file_prefix + ".hc.snpeff.vcf",
+                    options=config.param('compute_effects', 'options')
+                ),
+                htslib.bgzip_tabix(
+                    input_file_prefix + ".hc.snpeff.vcf",
+                    input_file_prefix + ".hc.snpeff.vcf.gz"
+                ),
             ], name="compute_effects." + sample.name)
             job.samples = [sample]
             jobs.append(job)
@@ -1019,8 +1153,11 @@ pandoc --to=markdown \\
             input_file_prefix = os.path.join(temp_dir, sample.name, sample.name)
         
             job = concat_jobs([
-                gemini.gemini_annotations(input_file_prefix + ".hc.flt.vt.snpeff.vcf.gz",
-                                          input_file_prefix + ".gemini." + gemini_version + ".db", temp_dir)
+                gemini.gemini_annotations(
+                    input_file_prefix + ".hc.snpeff.vcf.gz",
+                    input_file_prefix + ".gemini." + gemini_version + ".db",
+                    temp_dir
+                )
             ], name="gemini_annotations." + sample.name)
             job.samples = [sample]
             jobs.append(job)
@@ -1295,6 +1432,35 @@ pandoc --to=markdown \\
             jobs.append(job)
         
             return jobs
+
+    def run_annofuse(self):
+        """
+
+        """
+        jobs = []
+
+        for sample in self.samples:
+            arriba_output = os.path.join("fusion", sample.name, "arriba", "fusions.tsv")
+            star_fusion_output = os.path.join("fusion", sample.name, "star_fusion",
+                                              "star-fusion.fusion_predictions.abridged.coding_effect.tsv")
+            output = os.path.join("fusion", sample.name, "annoFuse")
+
+            job = concat_jobs([
+                bash.mkdir(
+                    output,
+                    remove=True
+                ),
+                annoFuse.run(
+                    arriba_output,
+                    star_fusion_output,
+                    sample.name
+                )
+            ], name="run_annoFuse." + sample.name)
+            
+            job.samples = [sample]
+            jobs.append(job)
+            
+        return jobs
 
     def fusion_annotation(self):
         """
@@ -2137,12 +2303,14 @@ done""".format(
                 self.recalibration,
                 self.gatk_haplotype_caller,
                 self.merge_hc_vcf,
+                self.run_vcfanno,
                 self.variant_filtration,
                 self.decompose_and_normalize,
                 self.compute_snp_effects,
                 self.gemini_annotations,
                 self.run_star_fusion,
                 self.run_arriba,
+                self.run_annofuse,
                 self.picard_rna_metrics,
                 self.estimate_ribosomal_rna,
                 self.rnaseqc,
