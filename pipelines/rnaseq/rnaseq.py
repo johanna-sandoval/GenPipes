@@ -48,7 +48,6 @@ from bfx import gq_seq_utils
 from bfx import htseq
 from bfx import metrics
 from bfx import fastqc
-from bfx import picard
 from bfx import samtools
 from bfx import bvatools
 from bfx import rmarkdown
@@ -451,6 +450,24 @@ pandoc --to=markdown \\
             job.name = "picard_mark_duplicates." + sample.name
             jobs.append(job)
 
+            report_file = os.path.join("report", "DnaSeq.picard_mark_duplicates.md")
+            jobs.append(
+                Job(
+                    [os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam") for sample in self.samples],
+                    [report_file],
+                    command="""\
+    mkdir -p report && \\
+    cp \\
+      {report_template_dir}/{basename_report_file} \\
+      {report_file}""".format(
+                        report_template_dir=self.report_template_dir,
+                        basename_report_file=os.path.basename(report_file),
+                        report_file=report_file
+                    ),
+                    report_files=[report_file],
+                    name="picard_mark_duplicates_report")
+            )
+
         return jobs
 
     def metrics_rna_fastqc(self):
@@ -458,9 +475,9 @@ pandoc --to=markdown \\
         jobs = []
         for sample in self.samples:
             fastqc_directory = os.path.join("metrics", "rna", sample.name, "fastqc")
-            input = os.path.join("alignment", sample.name, sample.name + ".sorted.dup.bam")
+            input = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam")
             output_dir = os.path.join(fastqc_directory)
-            output = os.path.join(fastqc_directory, sample.name + ".sorted.dup_fastqc.zip")
+            output = os.path.join(fastqc_directory, sample.name + ".sorted.mdup_fastqc.zip")
 
             adapter_file = config.param('fastqc', 'adapter_file', required=False, type='filepath')
             adapter_job = None
@@ -2329,12 +2346,14 @@ done""".format(
                 self.recalibration,
                 self.gatk_haplotype_caller,
                 self.merge_hc_vcf,
+                self.run_vcfanno,
                 self.variant_filtration,
                 self.decompose_and_normalize,
                 self.compute_snp_effects,
                 self.gemini_annotations,
                 self.run_star_fusion,
                 self.run_arriba,
+                self.run_annofuse,
                 self.picard_rna_metrics,
                 self.estimate_ribosomal_rna,
                 self.rnaseqc,

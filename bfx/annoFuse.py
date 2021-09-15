@@ -33,6 +33,7 @@ def run(input_arriba, input_star_fusion, sample_name):
         [
             ['run_annoFuse', 'module_R'],
             ['run_annoFuse', 'module_mugqic_tools'],
+
         ],
     
         command="""\\
