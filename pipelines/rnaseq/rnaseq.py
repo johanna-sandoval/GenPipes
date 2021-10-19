@@ -2357,6 +2357,7 @@ done""".format(
                 self.picard_rna_metrics,
                 self.estimate_ribosomal_rna,
                 self.rnaseqc,
+                self.gatk_callable_loci,
                 self.wiggle,
                 self.raw_counts,
                 self.raw_counts_metrics,
