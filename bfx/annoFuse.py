@@ -29,9 +29,10 @@ from core.job import *
 def run(input_arriba, input_star_fusion, sample_name):
     return Job(
         [input_arriba, input_star_fusion],
-        [sample_name],
+        [sample_name + ".putative_driver_fusions.tsv"],
         [
             ['run_annoFuse', 'module_R'],
+            ['run_annoFuse', 'module_mugqic_tools'],
         ],
     
         command="""\\

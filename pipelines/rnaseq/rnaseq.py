@@ -553,6 +553,31 @@ pandoc --to=markdown \\
         
         return jobs
 
+    def gatk_callable_loci(self):
+        """
+        Computes the callable region or the genome as a bed track.
+        """
+
+        jobs = []
+
+        for sample in self.samples:
+            alignment_file_prefix = os.path.join("alignment", sample.name, sample.name + ".")
+            alignment_directory = os.path.join("alignment", sample.name)
+            [input] = self.select_input_files([
+                [os.path.join(alignment_directory, sample.name + ".sorted.mdup.split.realigned.recal.bam")],
+            ])
+
+            job = gatk4.callable_loci(
+                input,
+                alignment_file_prefix + "callable.bed",
+                alignment_file_prefix + "callable.summary.txt"
+            )
+            job.name = "gatk_callable_loci." + sample.name
+            job.samples = [sample]
+            jobs.append(job)
+
+        return jobs
+
     def rnaseqc(self):
             """
             Computes a series of quality control metrics using [RNA-SeQC](https://www.broadinstitute.org/cancer/cga/rna-seqc).
@@ -1453,7 +1478,7 @@ pandoc --to=markdown \\
                 annoFuse.run(
                     arriba_output,
                     star_fusion_output,
-                    sample.name
+                    os.path.join(output, sample.name)
                 )
             ], name="run_annoFuse." + sample.name)
             
@@ -2314,6 +2339,7 @@ done""".format(
                 self.picard_rna_metrics,
                 self.estimate_ribosomal_rna,
                 self.rnaseqc,
+                self.gatk_callable_loci,
                 self.wiggle,
                 self.raw_counts,
                 self.raw_counts_metrics,
