@@ -1705,7 +1705,7 @@ class RunProcessing(common.MUGQICPipeline):
                 if(samples > 1):
                     input_files.append("ncm.conf")
                     NGS_checkmate_job = ngscheckmate.fastq(input_files, output_files, os.path.join(output_dir,lane), filelist_path)
-
+                    NGS_checkmate_job.samples = readset.sample
                     job = concat_jobs([job_mkdir, job_rm, job_touch, job_filelist, NGS_checkmate_job])
                     job.name = "sample_mixup.ngscheckmate_by_lane_" + lane
                     jobs.append(job)
@@ -1791,6 +1791,7 @@ class RunProcessing(common.MUGQICPipeline):
             if(samples > 1):
                 input_files.append("ncm.conf")
                 NGS_checkmate_job = ngscheckmate.fastq(input_files, output_files, os.path.join(output_dir,self.run_id), filelist_path)
+                NGS_checkmate_job.samples = self.samples
 
                 job = concat_jobs([job_mkdir, job_rm, job_touch, job_filelist, NGS_checkmate_job])
                 job.name = "sample_mixup.ngscheckmate_by_run_" + self.run_id
@@ -2059,6 +2060,7 @@ class RunProcessing(common.MUGQICPipeline):
                                                                  options)
 
                     if "Homo_sapiens" in reference or NonHumanSNPlist:
+                        bammixchecker_job.samples = self.samples
                         job = concat_jobs([job_mkdir, job_rm, job_touch, job_filelist, bammixchecker_job])
                         job.name = "sample_mixup.bamixchecker_by_lanes" + "_" + species_name + "_" + lane
                         jobs.append(job)
@@ -2158,8 +2160,9 @@ class RunProcessing(common.MUGQICPipeline):
                                                              options)
 
                 if "Homo_sapiens" in reference or NonHumanSNPlist:
+                    bammixchecker_job.samples = self.samples
                     job = concat_jobs([job_mkdir, job_rm, job_touch, job_filelist, bammixchecker_job])
-                    job.name = "sample_mixup.bamixchecker_by_lanes" + "_" + species_name + "_" + self.run_id
+                    job.name = "sample_mixup.bamixchecker_by_run" + "_" + species_name + "_" + self.run_id
                     jobs.append(job)
 
             else:

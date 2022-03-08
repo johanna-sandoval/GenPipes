@@ -164,11 +164,12 @@ mgig400:
 5- blast
 6- align
 7- picard_mark_duplicates
-8- metrics
-9- md5
-10- report
-11- copy
-12- final_notification
+8- check_sample_mixup
+9- metrics
+10- md5
+11- report
+12- copy
+13- final_notification
 ----
 mgit7:
 1- basecall
@@ -271,6 +272,58 @@ align the reads.
 picard_mark_duplicates
 ----------------------
 Runs Picard mark duplicates on the sorted bam file.
+
+check_sample_mixup
+------------------------
+
+Sample mixup analysis is performed to identify run processing data files from 
+the same individual. This step can be used to identify doubles or compare 
+samples in the same project id. Additionally, it can be used to compare current 
+run processing data with an existing dataset. This enable us to find and compare
+samples from same individuals from two different runs. 
+(ie. RNA and WGS data from two different projects)
+
+Currently it uses two commonly used tools (ie. NGSCheckmate and BAMixchecker) 
+to identify sample mixups.
+
+NGSCheckmate only supports for human samples and FASTQ files (unaligned reads) 
+are used (the tool supports BAM and VCF files. But the GenPipes only utilizes 
+FASTQ files) as the input files. It supports various types of NGS data files 
+including (but not limited to) whole genome sequencing (WGS), whole exome 
+sequencing (WES), RNA-seq, single cell RNA-seq (scRNA) ChIP-seq, and targeted 
+sequencing of various depths. NGScheckmate can identify sample mixup even from 
+mixed data types (e.g. WES and RNA-seq, or RNA-seq and ChIP-seq). The analysis
+is performed for each run with all lanes together 
+and each lane in a particular run separately. 
+Any type of mixed supported data can be used with in a run. NGSCheckMate 
+uses depth-dependent correlation models of allele fractions of known 
+single-nucleotide polymorphisms (SNPs) to identify samples from the same 
+individual. For more information visit: https://github.com/parklab/NGSCheckMate. 
+The output files can be found in 
+sample_mixup_detection/NGSCheckMate/Homo_sapiens/RUN_ID
+
+BAMixchecker basically uses BAM files but BAM files need to be processed 
+in-order to use as inputs to the tool. Depending on the sequencing type 
+either 2 or no additional sub step will be executed automatically.
+Currently we have tested RNA-seq and DNA-seq data by ourselves. 
+If the data are from RNA-seq below 2 steps will be done to pre-process data
+
+    split_N_trim
+    sambamba_merge_splitNtrim_files
+
+If the data are from DNA-seq no additional steps will be performed. 
+Depending on the data type pre-processed BAM files will be then use as inputs 
+to the BAMixchekcer. 
+The output files can be found in sample_mixup_detection/BAMixChecker/projects/RUN_ID/SPECIES/BAMixChecker
+
+if the data source is human event file can retrieve all the information need to run the pipeline If the data is from another organism please specify the paths to following keys in the [DEFAULT] section of a custom ini file.
+
+    genome_dictionary
+    known_gnomad
+    known_mills
+    population_AF
+    dbsnp_version
+
 
 metrics
 -------
