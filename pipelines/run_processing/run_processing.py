@@ -1705,7 +1705,6 @@ class RunProcessing(common.MUGQICPipeline):
                 if(samples > 1):
                     input_files.append("ncm.conf")
                     NGS_checkmate_job = ngscheckmate.fastq(input_files, output_files, os.path.join(output_dir,lane), filelist_path)
-                    NGS_checkmate_job.samples = readset.sample
                     job = concat_jobs([job_mkdir, job_rm, job_touch, job_filelist, NGS_checkmate_job])
                     job.name = "sample_mixup.ngscheckmate_by_lane_" + lane
                     jobs.append(job)
@@ -4275,6 +4274,7 @@ class RunProcessing(common.MUGQICPipeline):
                 self.blast,
                 self.align,
                 self.picard_mark_duplicates,
+                self.check_sample_mixup,
                 self.metrics,
                 self.md5,
                 self.report,
@@ -4305,6 +4305,7 @@ class RunProcessing(common.MUGQICPipeline):
                 self.blast,
                 self.align,
                 self.picard_mark_duplicates,
+                self.check_sample_mixup,
                 self.metrics,
                 self.md5,
                 self.report,

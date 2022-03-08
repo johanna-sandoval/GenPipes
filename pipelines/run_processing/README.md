@@ -150,11 +150,12 @@ illumina:
 6- blast
 7- align
 8- picard_mark_duplicates
-9- metrics
-10- md5
-11- report
-12- copy
-13- final_notification
+9- check_sample_mixup
+10- metrics
+11- md5
+12- report
+13- copy
+14- final_notification
 ----
 mgig400:
 1- fastq
@@ -180,11 +181,12 @@ mgit7:
 6- blast
 7- align
 8- picard_mark_duplicates
-9- metrics
-10- md5
-11- report
-12- copy
-13- final_notification
+9- check_sample_mixup
+10- metrics
+11- md5
+12- report
+13- copy
+14- final_notification
 
 ```
 index
