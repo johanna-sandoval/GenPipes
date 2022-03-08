@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 ################################################################################
 # Copyright (C) 2014, 2015 GenAP, McGill University and Genome Quebec Innovation Centre
 #
@@ -37,9 +35,10 @@ def run_bam(inputfiles, outputfiles, out_dir, inputlist, reference, options):
             ['run_bamixchecker', 'module_bedtools'],
             ['run_bamixchecker', 'module_R'],
             ['run_bamixchecker', 'module_pandoc'],
-            ['run_bamixchecker', 'module_gatk']
+            ['run_bamixchecker', 'module_gatk'],
+            ['run_bamixchecker', 'module_bamixchecker']
         ],
-        command="""python /lb/project/mugqic/projects/pubudu/SNP_samplemix/BAMixChecker/BAMixChecker.py -l {inputlist} -r {reference} -o {out_dir} {options}""".
+        command="""python $BAMixChecker_PATH/BAMixChecker.py -l {inputlist} -r {reference} -o {out_dir} {options}""".
             format(inputlist=inputlist,
                    out_dir=out_dir,
                    options=options,
