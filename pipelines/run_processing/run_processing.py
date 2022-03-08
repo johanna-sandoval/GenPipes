@@ -144,7 +144,6 @@ class RunProcessing(common.MUGQICPipeline):
         self.argparser.add_argument("-t", "--type", help = "Sequencing technology : Illumina, MGI G400 or MGI T7 (mandatory)", choices=['illumina', 'mgig400', 'mgit7'], required=False)
         self.argparser.add_argument("-r", "--readsets", help="Sample sheet for the MGI run to process (mandatory)", type=argparse.FileType('r'), required=False)
         self.argparser.add_argument("-d", "--run", help="Run directory (mandatory)", required=False, dest="run_dir")
-        self.argparser.add_argument("--run-id", help="Run ID. Default is parsed from the run folder", required=False, dest="run_id")
         self.argparser.add_argument("-f", "--flag", help="T7 flag files directory (mandatory for MGI T7 runs)", type=pathlib.Path, dest="raw_flag_dir", required=False)
         self.argparser.add_argument("--splitbarcode-demux", help="demultiplexing done while basecalling with MGI splitBarcode  (only affect MGI G400 or T7 runs)", action="store_true", required=False, dest="splitbarcode_demux")
         self.argparser.add_argument("--lane", help="Lane number (to only process the given lane)", type=int, required=False, dest="lane_number")
@@ -201,10 +200,10 @@ class RunProcessing(common.MUGQICPipeline):
          The run id from the run folder.
          Supports both default folder name configuration and GQ's globaly unique name convention.
         For MGI runs :
-         The RUN ID from the run folder or from parameter
+         The RUN ID from the run folder
         """
-        if self.args.type == 'illumina':
-            if not hasattr(self, "_run_id"):
+        if not hasattr(self, "_run_id"):
+            if self.args.type == 'illumina':
                 if re.search(".*_\d+HS\d\d[AB]", self.run_dir):
                     m = re.search(".*/(\d+_[^_]+_\d+_[^_]+_(\d+)HS.+)", self.run_dir)
                     self._run_id = m.group(2)
@@ -213,16 +212,15 @@ class RunProcessing(common.MUGQICPipeline):
                     self._run_id = m.group(2)
                 else:
                     log.warn("Unsupported folder name: " + self.run_dir)
-        else:
-            if not hasattr(self, "_run_id"):
-                if self.args.run_id:
-                    self._run_id = self.args.run_id
+            else:
+                rundir_basename = os.path.basename(self.run_dir.rstrip('/'))
+                if "_" in rundir_basename:
+                    [flowcell, self._run_id] = rundir_basename.split("_")
                 else:
-                    rundir_basename = os.path.basename(self.run_dir.rstrip('/'))
-                    if "_" in rundir_basename:
-                        [junk_food, self._run_id] = rundir_basename.split("_")
-                    else:
+                    if not self.args.type == 'mgit7':
                         _raise(SanitycheckError("Error: Run ID could not be parsed from the RUN folder : " + self.run_dir))
+                    else:
+                        self._run_id = rundir_basename
         return self._run_id
 
     @property

@@ -816,7 +816,6 @@ def parse_mgi_raw_readset_files(
     index2cycles,
     output_dir
     ):
-
     readsets = []
     samples = []
     skipped_db = []
