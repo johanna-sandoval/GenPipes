@@ -1790,7 +1790,6 @@ class RunProcessing(common.MUGQICPipeline):
             if(samples > 1):
                 input_files.append("ncm.conf")
                 NGS_checkmate_job = ngscheckmate.fastq(input_files, output_files, os.path.join(output_dir,self.run_id), filelist_path)
-                NGS_checkmate_job.samples = self.samples
 
                 job = concat_jobs([job_mkdir, job_rm, job_touch, job_filelist, NGS_checkmate_job])
                 job.name = "sample_mixup.ngscheckmate_by_run_" + self.run_id
@@ -1838,8 +1837,8 @@ class RunProcessing(common.MUGQICPipeline):
         """
 
         jobs = []
-        jobs.extend(self.checkmate_samplemixup_by_lane()),
-        jobs.extend(self.checkmate_samplemixup_by_run()),
+        jobs.extend(self.checkmate_samplemixup_by_lane())
+        jobs.extend(self.checkmate_samplemixup_by_run())
         jobs.extend(self.split_N_trim())
         jobs.extend(self.sambamba_merge_splitNtrim_files())
         jobs.extend(self.bamixchecker_samplemixup_by_lane())
