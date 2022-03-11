@@ -573,7 +573,7 @@ class RunProcessing(common.MUGQICPipeline):
             self._report_hash = {}
             for lane in self.lanes:
                 self._report_hash[lane] = {
-                    "version" : "2.0",
+                    "version" : "3.0",
                     "run" : self.run_id,
                     "instrument" : self.instrument,
                     "flowcell" : self.flowcell_id,
@@ -3349,8 +3349,8 @@ class RunProcessing(common.MUGQICPipeline):
                     "project": readset.project_id,
                     "sample": readset.name,
                     "index": {
-                        "Barcode": readset.index_name,
-                        "Barcode sequence": ','.join([readset_index['BARCODE_SEQUENCE'] for readset_index in readset.indexes]),
+                        "barcode": readset.index_name,
+                        "barcode_sequence": ','.join([readset_index['BARCODE_SEQUENCE'] for readset_index in readset.indexes]),
                         "pct_on_index_in_lane": None,
                         "pct_of_the_lane": None,
                         "pct_perfect_barcode": None,
@@ -3361,8 +3361,8 @@ class RunProcessing(common.MUGQICPipeline):
                         "pct_q30_bases": None
                     },
                     "qc": {
-                        "avgQual": None,
-                        "duplicateRate": None
+                        "avg_qual": None,
+                        "duplicate_rate": None
                     },
                     "sample_tag": None,
                     "blast": {
@@ -4005,12 +4005,10 @@ class RunProcessing(common.MUGQICPipeline):
                 unaligned_i1
             ]
             unexpected_barcode_counts_i1 = re.sub(".fastq.gz", ".counts.txt", unaligned_i1)
-#            demuxfastqs_outputs.append(unexpected_barcode_counts_i1)
             if self.is_dual_index[lane]:
                 unaligned_i2 = os.path.join(output_dir, "Undetermined_S0_L00" + lane + "_I2_001.fastq.gz")
                 outputs.append(unaligned_i2)
                 unexpected_barcode_counts_i2 = re.sub(".fastq.gz", ".counts.txt", unaligned_i2)
-#                demuxfastqs_outputs.append(unexpected_barcode_counts_i2)
 
             postprocessing_jobs.append(
                 pipe_jobs(
