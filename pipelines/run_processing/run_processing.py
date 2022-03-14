@@ -1854,7 +1854,7 @@ class RunProcessing(common.MUGQICPipeline):
 
         jobs = []
 
-        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', type='posint')
+        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', param_type='posint')
         if nb_jobs > 50:
             log.warning(
                 "Number of haplotype jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
@@ -1866,7 +1866,7 @@ class RunProcessing(common.MUGQICPipeline):
                 sequence_dictionary = (re.sub(r"\.[^.]+$", "", readset.reference_file) + ".dict")
 
                 if not (os.path.exists(sequence_dictionary)):
-                    sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', type='filepath')
+                    sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath')
                 if(os.path.exists(sequence_dictionary) ):
                     bam = readset.bam + ".dup.bam"
                     if readset.is_rna:
@@ -1929,7 +1929,7 @@ class RunProcessing(common.MUGQICPipeline):
 
         jobs = []
 
-        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', type='posint')
+        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', param_type='posint')
         if nb_jobs > 50:
             log.warning("Number of haplotype jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
         #if "blah" not in somestring:
@@ -1941,7 +1941,7 @@ class RunProcessing(common.MUGQICPipeline):
                 sequence_dictionary = (re.sub(r"\.[^.]+$", "", readset.reference_file) + ".dict")
 
                 if not (os.path.exists(sequence_dictionary)):
-                    sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', type='filepath')
+                    sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath')
                 if(os.path.exists(sequence_dictionary) ):
                     if readset.is_rna:
 

@@ -128,7 +128,7 @@ java -Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram} -cp $GATK_JAR \\
                 reference=config.param('gatk_cat_variants', 'genome_fasta', param_type='filepath'),
                 variants="".join(" \\\n  --variant " + variant for variant in variants),
                 output=output
-            )`
+            )
         )
 
 
