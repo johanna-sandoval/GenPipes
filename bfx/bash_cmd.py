@@ -260,8 +260,23 @@ def zip(
     recursive=False
     ):
 
-    # all the inputs are supposed to be in the same directory
-    inputs_dir = os.path.dirname(inputs[0]) 
+    if isinstance(inputs, list):
+        # all the inputs are supposed to be in the same directory
+        inputs_dir = os.path.dirname(inputs[0])
+        input_string = " ".join([os.path.basename(input_file) for input_file in inputs])
+
+    else:
+        # if the input is a foler path
+        if os.path.isdir(inputs):
+            inputs_dir = inputs
+            inputs = None
+            input_string = "*"
+
+        # if the input is a single file
+        else:
+            inputs_dir = os.path.dirname(inputs)
+            inputs = [inputs]
+            inputs_string = inputs[0]
 
     return Job(
         inputs,
@@ -273,7 +288,7 @@ popd""".format(
             archive_dir=inputs_dir,
             recursive="-r " if recursive else "",
             output=zip_output if zip_output else "",
-            inputs=" ".join([os.path.basename(input) for input in inputs]) if inputs else ""
+            inputs=input_string
         )
     )
 

@@ -28,7 +28,7 @@ import sys
 import subprocess
 
 # MUGQIC Modules
-from .run_processing_aligner import BwaRunProcessingAligner, StarRunProcessingAligner
+from .run_processing_aligner import BwaRunProcessingAligner, StarRunProcessingAligner, CellrangerRunProcessingAligner, AtacRunProcessingAligner
 from .sample import Sample, RunProcessingSample, NanoporeSample
 from core.config import config, _raise, SanitycheckError
 
@@ -294,6 +294,14 @@ class IlluminaRawReadset(IlluminaReadset):
         return self._is_rna
 
     @property
+    def is_10x(self):
+        return self._is_10x
+
+    @property
+    def is_atac(self):
+        return self._is_atac
+
+    @property
     def annotation_files(self):
         if not hasattr(self, "_annotation_files"):
             return None
@@ -339,6 +347,10 @@ class IlluminaRawReadset(IlluminaReadset):
     @property
     def description(self):
         return self._description
+
+    @property
+    def species(self):
+        return self._species
 
     @property
     def flow_cell(self):
@@ -411,29 +423,34 @@ def parse_illumina_raw_readset_files(
                 readset._library_type = protocol_line['Library Structure']
 
                 if readset.index_name:
-                    if re.search("SI-*", readset._description):
-                        key = readset._description
-                        for index_line in index_csv:
-                            if index_line and index_line[0] == key:
-                                readset._index = "-".join(index_line[1:])
-                                break
-                        else:
-                            _raise(SanitycheckError("Could not find index " + key + " in index file " + index_file + " Aborting..."))
-                    else:
-                        key = readset._description.split("-")[0]
-                        index_to_use = ""
-                        for idx, index in enumerate(readset._description.split("-")):
+                    # Dual Index
+                    if re.search("-", readset.index_name) and not re.search("SI-", readset.index_name):
+                        key = readset.index_name.split('-')[0]
+                        for idx, index in enumerate(readset.index_name.split("-")):
                             for index_line in index_csv:
                                 if index_line and index_line[0] == index:
                                     if idx > 0 and len(index_line[1]) > 0:
-                                        index_to_use += "-"
-                                    index_to_use += index_line[1]
+                                        index2 = index_line[1]
+                                    else:
+                                        index1 = index_line[1]
                                     break
                             else:
-                                _raise(SanitycheckError("Could not find index " + index + " in index file " + index_file + " Aborting..."))
-                        readset._index = index_to_use
+                                 _raise(SanitycheckError("Could not find index " + index + " in index file " + index_file + " Aborting..."))
+                        index_from_lims = [{'INDEX1':index1, 'INDEX2':index2}]
+                    # Single-index (pooled or not)
+                    else:
+                        key = readset.index_name
+                        for index_line in index_csv:
+                            if index_line and index_line[0] == key:
+                                index_from_lims = [{'INDEX1':index, 'INDEX2':""} for index in index_line[1:] if len(index) > 0]
+                                break
+                        else:
+                            _raise(SanitycheckError("Could not find index " + key + " in index file file " + index_file + " Aborting..."))
+                    readset._index = index_from_lims
+                    log.error(readset.index)
+
                     for adapter_line in adapter_csv:
-                        if adapter_line:
+                        if adapter_line :
                             if adapter_line[0] == key:
                                 readset._library_type = adapter_line[1]  # TruSeq, Nextera, TenX...
                                 readset._index_type = adapter_line[2]    # SINGLEINDEX or DUALINDEX
@@ -443,9 +460,10 @@ def parse_illumina_raw_readset_files(
                     # At this point, inedx_file, adapter_file  protocol_file were succesfully parsed, then exit the loop !
                     break
         else:
-            _raise(SanitycheckError("Could not find protocol " + line['LibraryProcess'] + " (from event file " + readset_file + ") in protocol library file " + protocol_file + " for readset " + readset.name + " Aborting..."))
+            _raise(SanitycheckError("Could not find protocol '" + line['LibraryProcess'] + "' (from event file " + readset_file + ") in protocol library file " + protocol_file + " for readset " + readset.name + " Aborting..."))
 
         readset._genomic_database = line['Reference']
+        readset._species = line['Species']
 
         readset._run = Xml.parse(os.path.join(run_dir, "RunInfo.xml")).getroot().find('Run').get('Number')
         readset._lane = current_lane
@@ -459,6 +477,12 @@ def parse_illumina_raw_readset_files(
         readset._project = line['ProjectName']
         readset._project_id = line['ProjectLUID']
         readset._is_rna = re.search("RNA|cDNA", readset.library_source) or (readset.library_source == "Library" and re.search("RNA", readset.library_type))
+        readset._is_10x = False
+        readset._is_atac = False
+        if "10x" in readset.protocol:
+            readset._is_10x = True
+        if "ATAC" in readset.protocol:
+            readset._is_atac = True
 
         readset._beds = line['Capture REF_BED'].split(";")[1:] if line['Capture REF_BED'] and line['Capture REF_BED'] != "N/A" else []
 
@@ -474,19 +498,8 @@ def parse_illumina_raw_readset_files(
         readset.index_fastq1 = re.sub("_R1_", "_I1_", readset.fastq1) if index1cycles else None
         readset.index_fastq2 = re.sub("_R2_", "_I2_", readset.fastq2) if index2cycles else None
 
+        log.error("now getting the indexes !")
         readset._indexes = get_index(readset, index1cycles, index2cycles, seqtype) if index1cycles else None
-
-        if any(s in readset.protocol for s in ["10X_scRNA", "Single Cell RNA"]):
-            readset._is_scrna = True
-        else:
-            readset._is_scrna = False
-
-#        readsets.append(readset)
-#        sample.add_readset(readset)
-
-#    skipped_db = []
-#    # Searching for a matching reference for the specified species
-#    for readset in readsets:
 
         m = re.search("(?P<build>\w+):(?P<assembly>[\w\.]+)", readset.genomic_database)
         genome_build = None
@@ -503,24 +516,17 @@ def parse_illumina_raw_readset_files(
             folder_name = os.path.join(genome_build.species + "." + genome_build.assembly)
             current_genome_folder = os.path.join(genome_root, folder_name)
 
-#            if readset.is_scrna:
-#                readset._aligner = CellrangerRunProcessingAligner(output_dir, current_genome_folder)
-            if readset.is_rna:
-                bioinfo_csv = csv.reader(open(bioinfo_file, 'r'))
-                for row in bioinfo_csv:
-                    if row[0] == "Read1 Cycles" and not readset.is_scrna:
-                        nb_cycles = row[1]
-                        break
-                    elif row[0] == "Read2 Cycles" and readset.is_scrna:
-                        nb_cycles = row[1]
-                        break
-                else:
-                    _raise(SanitycheckError("Could not get proper Read Cycles from " + bioinfo_file))
+            if readset.is_10x:
+                if readset.is_rna:
+                    readset._aligner = CellrangerRunProcessingAligner(output_dir, current_genome_folder, "Illumina")
+                elif readset.is_atac:
+                    readset._aligner = AtacRunProcessingAligner(output_dir, current_genome_folder, "Illumina")
+            elif readset.is_rna:
                 readset._aligner = StarRunProcessingAligner(output_dir, current_genome_folder, int(nb_cycles), "Illumina")
             else:
                 readset._aligner = BwaRunProcessingAligner(output_dir, current_genome_folder, "Illumina")
 
-            aligner_reference_index = readset.aligner.get_reference_index(readset)
+            aligner_reference_index = readset.aligner.get_reference_index()
             annotation_files = readset.aligner.get_annotation_files()
             reference_file = readset.aligner.get_reference_file()
             if reference_file and os.path.isfile(reference_file):
@@ -959,9 +965,9 @@ def parse_mgi_raw_readset_files(
             folder_name = os.path.join(genome_build.species + "." + genome_build.assembly)
             current_genome_folder = os.path.join(genome_root, folder_name)
 
-#            if readset.is_scrna:
-#                readset._aligner = CellrangerRunProcessingAligner(output_dir, current_genome_folder)
-            if readset.is_rna:
+            if readset.is_scrna:
+                readset._aligner = CellrangerRunProcessingAligner(output_dir, current_genome_folder, "MGI")
+            elif readset.is_rna:
                 if readset.is_scrna:
                     nb_cycles = read2cycles
                 else:
@@ -1331,6 +1337,7 @@ def sub_get_index(
         main_seq_pattern = "grep -A4 '^%s:' %s | grep -E \"^3'|^5'\" | head -n 1 | sed \"s/5'//g\"  | sed \"s/3'//g\" | tr -d \" '\-\" | grep %s"
         actual_seq_pattern = "echo %s | awk -F\"%s\" '{print $%d}' | sed \"%s\" | cut -c %s"
 
+        log.error("are we here yet ?")
 #        present = subprocess.check_output(main_seq_pattern % (readset.library_type, index_file, "-c " + index1_primer), shell=True, text=True).strip()
         try:
             present = subprocess.check_output(main_seq_pattern % (readset.library_type, index_file, "-c " + index1_primer), shell=True, text=True).strip()
@@ -1345,11 +1352,14 @@ def sub_get_index(
                 index1_primer_seq = index1_primer[:len(index1seq)-int(index1cycles)]
             else:
                 index1_primer_seq = index1_primer
-            if seqtype in ["dnbseqg400", "dnbseqt7"] and readset.run_type == "PAIRED_END":
+            if readset.library_type == 'tenX_sc_RNA_v1' or readset.library_type == 'TELL-Seq':
+                actual_index1seq = ""
+            elif seqtype in ["dnbseqg400", "dnbseqt7"] and readset.run_type == "PAIRED_END":
                 actual_index1seq = subprocess.check_output(actual_seq_pattern % (main_seq, index1_primer_seq, 2, "s/\[i7\]/"+index1seq+"/g", str(index1_primeroffset+1)+"-"+str(index1_primeroffset+int(index1cycles))+" | tr 'ATGC' 'TACG' | rev"), shell=True, text=True).strip()
             else:
                 actual_index1seq = subprocess.check_output(actual_seq_pattern % (main_seq, index1_primer_seq, 2, "s/\[i7\]/"+index1seq+"/g", str(index1_primeroffset+1)+"-"+str(index1_primeroffset+int(index1cycles))), shell=True, text=True).strip()
 
+            log.error("and here ???")
             if index2cycles:
                 main_seq = subprocess.check_output(main_seq_pattern.replace("| head -n 1 |", "|") % (readset.library_type, index_file, index2_primer), shell=True, text=True).strip()
 

@@ -581,6 +581,8 @@ class CellrangerRunProcessingAligner(RNARunProcessingAligner):
                     if config.has_option("DEFAULT", "assembly_synonyms"):
                         synonym = config.get("DEFAULT", "assembly_synonyms")
                         trans_path = self.find_10x_synonym_reference(self.genome_folder, synonym, "10x_transcriptome")
+            else:
+                log.error("ooops")
 
             return trans_path
         else:
@@ -613,7 +615,7 @@ class CellrangerRunProcessingAligner(RNARunProcessingAligner):
         output_bam = readset.bam + ".bam"
         output_bai = readset.bam + ".bai"
         output_summary = readset.bam + ".10x_summary.html"
-        output_zip = readset.bam + "." + readset.run + "." + readset.lane_str + ".10x_outputs.zip"
+        output_zip = readset.bam + "." + readset.run + "." + readset.lane + ".10x_outputs.zip"
         job = concat_jobs(
             [
                 bash.mkdir(os.path.dirname(readset.bam + ".bam")),
@@ -630,9 +632,10 @@ class CellrangerRunProcessingAligner(RNARunProcessingAligner):
                     input_summary,
                     output_summary
                 ),
-                Job(
-                    output_files=[output_zip],
-                    command="cd " + outdir + " && zip -r " + output_zip + " *"
+                bash.zip(
+                    outdir,
+                    output_zip,
+                    recursive=True
                 )
             ],
             name="cellranger_count." + readset.name + "." + readset.run + "." + readset.lane,

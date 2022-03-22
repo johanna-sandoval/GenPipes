@@ -1606,18 +1606,15 @@ class RunProcessing(common.MUGQICPipeline):
             return self.throttle_jobs(jobs)
 
     def checkmate_samplemixup(self):
-
         """
         Check the sample mixup using NGSCheckmate. FASTQ files are used as the inputs for the analysis
         Only human samples can be processed.
         """
-
         jobs = []
         jobs.extend(self.checkmate_samplemixup_by_lane())
         jobs.extend(self.checkmate_samplemixup_by_run())
 
         return self.throttle_jobs(jobs)
-
 
     def checkmate_samplemixup_by_lane(self):
         """
@@ -1627,7 +1624,6 @@ class RunProcessing(common.MUGQICPipeline):
         If there is only one sample in a lane, it will be skipped
         """
         jobs = []
-
 
         #get all species in all the lanes and readsets and create a list
 
@@ -1974,7 +1970,6 @@ class RunProcessing(common.MUGQICPipeline):
         jobs = []
 
         species_list = list(set([readset.species for lane in self.lanes for readset in self.readsets[lane]]))
-        #project_list = list(set([readset.project_id for lane in self.lanes for readset in self.readsets[lane]]))
 
         for species in species_list:
             species_jobs = []
@@ -2391,7 +2386,7 @@ class RunProcessing(common.MUGQICPipeline):
 
             self.generate_lane_json_report_file(lane)
 
-            # metrics to JSON
+            ## Metrics to Json
             # Loop over all the steps of the pipeline
             for step in self.step_list:
                 report_step_jobs = []
@@ -2754,42 +2749,6 @@ class RunProcessing(common.MUGQICPipeline):
                len([read for read in self.read_infos[lane] if read.is_index]) < 2
 
     def get_smallest_index_length(self, lane):
-        if self.args.type == 'illumina':
-            return self.get_illumina_smallest_index_length(lane)
-        else:
-            return self.get_mgi_smallest_index_length(lane)
-
-    def get_illumina_smallest_index_length(self, lane):
-        """
-        Returns a list (for each index read of the lane) of the minimum between the number of index cycle on the
-        sequencer and all the index lengths.
-        """
-        run_index_lengths = [r.nb_cycles for r in self.read_infos if r.is_index] # from RunInfo
-
-#        if len(run_index_lengths) == 0 and len(self.readsets[lane]) > 1:
-#            _raise(SanitycheckError("Multiple samples on lane '" + lane + "', but no indexes were read from the sequencer."))
-
-        # loop on all index reads, to compare with samples index length
-        for i in range(len(run_index_lengths)):
-            min_sample_index_length = 0
-            try:
-                min_sample_index_length = min(len(readset.index.split("-")[i])
-                                              for readset in self.readsets[lane]
-                                              if (len(readset.index.split("-")) > i and len(readset.index.split("-")[i]) > 0))
-            except ValueError:
-                pass  # we don't have a sample with this Ith index read, use the 0 already set
-
-            empty_index_list = [ readset for readset in self.readsets[lane] if (len(readset.index.split("-")) <= i or len(readset.index.split("-")[i]) == 0) ]
-
-            if len(empty_index_list):
-                # we have samples without this Ith index read, so we skip it
-                min_sample_index_length = 0
-
-            run_index_lengths[i] = min(min_sample_index_length, run_index_lengths[i])
-
-        return run_index_lengths
-
-    def get_mgi_smallest_index_length(self, lane):
         """
         Returns a list (for each index read of the run) of the minimum between the number of index cycle on the
         sequencer and all the index lengths.
@@ -2799,12 +2758,15 @@ class RunProcessing(common.MUGQICPipeline):
         for readset in self.readsets[lane]:
             all_indexes += readset.index
 
-        if self.is_dual_index[lane]:
-            min_sample_index_length = min(len(index['INDEX2']) for index in all_indexes)
-            run_index_lengths.append(min(min_sample_index_length, int(self.index2cycles[lane])))
-
         min_sample_index_length = min(len(index['INDEX1']) for index in all_indexes)
         run_index_lengths.append(min(min_sample_index_length, int(self.index1cycles[lane])))
+
+        if self.is_dual_index[lane]:
+            min_sample_index_length = min(len(index['INDEX2']) for index in all_indexes)
+            if 'mgi' in self.args.type:
+                run_index_lengths.append(min(min_sample_index_length, int(self.index2cycles[lane])))
+            else:
+                run_index_lengths.insert(min(min_sample_index_length, int(self.index2cycles[lane])))
 
         return run_index_lengths
 
@@ -3394,16 +3356,7 @@ class RunProcessing(common.MUGQICPipeline):
             else:
                 for readset in self.readsets[lane]:
                     readset_name = readset.name
-                    step_report_files = []
-                    for job in step.jobs:
-                        if job.report_files:
-                            for sample in job.samples:
-                                if not isinstance(sample, str):
-                                    for readset in sample.readsets:
-                                        if readset.lane == lane and readset.name == readset.name:
-                                            for report_file in job.report_files:
-                                                step_report_files.append(report_file)
-                    step_report_files = list(set(step_report_files))
+                    step_report_files = list(set([report_file for job in step.jobs for sample in job.samples for sreadset in sample.readsets for report_file in job.report_files if job.report_files and not isinstance(sample, str) and sreadset.lane == lane and sreadset.name == readset.name]))
                     self.report_hash[lane]["multiqc_inputs"].extend([os.path.relpath(path, os.path.join(self.output_dir, "report")) for path in step_report_files])
 
         report_dir = os.path.join(self.output_dir, "report")

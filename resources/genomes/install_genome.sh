@@ -579,6 +579,36 @@ chmod -R ug+rwX,o+rX $INDEX_DIR \$LOG \$ERR"
   done
 }
 
+create_10x_references() {
+  if is_genome_big
+  then
+    runThreadN=20
+  else
+    runThreadN=1
+  fi
+  INDEX_DIR=$INSTALL_DIR/genome/10xGenomics
+  if ! is_up2date $INDEX_DIR/refdata-cellranger-$ASSEMBLY-*/fasta
+  then
+    echo
+    echo "Creating 10X scRNA reference and index..."
+    echo
+    CELLRANGER_CMD="\
+mkdir -p $INDEX_DIR && \
+module load $module_cellranger && \
+LOG=$LOG_DIR/cellranger_$TIMESTAMP.log && \
+ERR=$LOG_DIR/cellranger_$TIMESTAMP.err && \
+cd $INDEX_DIR && \
+mkgtf $ANNOTATIONS_DIR/$GTF output.gtf --attribute=key:allowable_value > \$LOG 2> \$ERR && \
+cellranger mkref --genome=refdata-cellranger-$ASSEMBLY-c3g --fasta=$GENOME_DIR/$GENOME_FASTA --genes=output.gtf >> \$LOG 2>> \$ERR && \
+rm -f output.gtf && \
+chmod -R ug+rwX,o+rX $INDEX_DIR \$LOG \$ERR"
+  else
+    echo
+    echo "Cellranger index up to date... skipping"
+    echo
+  fi
+}
+
 create_ncrna_bwa_index() {
   INDEX_DIR=$ANNOTATIONS_DIR/ncrna_bwa_index
   if ! is_up2date $INDEX_DIR/$NCRNA.sa
@@ -942,6 +972,7 @@ build_files() {
   if is_up2date $ANNOTATIONS_DIR/$GTF
   then
     create_star_index
+    create_10x_references
     create_gene_annotations
     create_gene_annotations_flat
   else
