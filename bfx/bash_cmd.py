@@ -276,7 +276,7 @@ def zip(
         else:
             inputs_dir = os.path.dirname(inputs)
             inputs = [inputs]
-            inputs_string = inputs[0]
+            input_string = inputs[0]
 
     return Job(
         inputs,

@@ -384,7 +384,7 @@ class RunProcessing(common.MUGQICPipeline):
         if not hasattr(self, "_is_dual_index"):
             self._is_dual_index = {}
             for lane in self.lanes:
-                if self.index2cycles[lane] == "0":
+                if "DUALINDEX" not in set([readset.index_type for readset in self.readsets[lane]]):
                     self._is_dual_index[lane] = False
                 else:
                     self._is_dual_index[lane] = True
@@ -1862,8 +1862,8 @@ class RunProcessing(common.MUGQICPipeline):
                 sequence_dictionary = (re.sub(r"\.[^.]+$", "", readset.reference_file) + ".dict")
 
                 if not (os.path.exists(sequence_dictionary)):
-                    sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath')
-                if(os.path.exists(sequence_dictionary) ):
+                    sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath', required=False)
+                if (os.path.exists(sequence_dictionary) ):
                     bam = readset.bam + ".dup.bam"
                     if readset.is_rna:
                         # splitN trim only need to do for RNA
@@ -1937,8 +1937,8 @@ class RunProcessing(common.MUGQICPipeline):
                 sequence_dictionary = (re.sub(r"\.[^.]+$", "", readset.reference_file) + ".dict")
 
                 if not (os.path.exists(sequence_dictionary)):
-                    sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath')
-                if(os.path.exists(sequence_dictionary) ):
+                    sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath', required=False)
+                if (os.path.exists(sequence_dictionary) ):
                     if readset.is_rna:
 
                         alignment_directory = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name)
@@ -2236,7 +2236,7 @@ class RunProcessing(common.MUGQICPipeline):
         for lane in self.lanes:
             lane_jobs = []
 
-            for readset in [readset for readset in self.readsets[lane] if readset.bam]:
+            for readset in [readset for readset in self.readsets[lane] if (readset.bam and readset.aligner.is_run_mark_duplicate())]:
                 input_file_prefix = readset.bam + '.'
                 input = input_file_prefix + "bam"
                 output = input_file_prefix + "dup.bam"
@@ -2286,6 +2286,7 @@ class RunProcessing(common.MUGQICPipeline):
         for lane in self.lanes:
             lane_jobs = []
             for readset in [readset for readset in self.readsets[lane] if readset.bam]:
+                jobs.extend(readset.aligner.get_fastq_metrics_jobs(readset))
                 job_list = readset.aligner.get_metrics_jobs(readset)
                 report_files = []
                 for job in job_list:
@@ -2761,12 +2762,12 @@ class RunProcessing(common.MUGQICPipeline):
         min_sample_index_length = min(len(index['INDEX1']) for index in all_indexes)
         run_index_lengths.append(min(min_sample_index_length, int(self.index1cycles[lane])))
 
-        if self.is_dual_index[lane]:
+        if self.index2cycles[lane]:
             min_sample_index_length = min(len(index['INDEX2']) for index in all_indexes)
             if 'mgi' in self.args.type:
-                run_index_lengths.append(min(min_sample_index_length, int(self.index2cycles[lane])))
+                run_index_lengths.insert(0, min(min_sample_index_length, int(self.index2cycles[lane])))
             else:
-                run_index_lengths.insert(min(min_sample_index_length, int(self.index2cycles[lane])))
+                run_index_lengths.append(min(min_sample_index_length, int(self.index2cycles[lane])))
 
         return run_index_lengths
 
@@ -2879,33 +2880,6 @@ class RunProcessing(common.MUGQICPipeline):
             return self.seqtype
 
     def validate_barcodes(self, lane):
-        if self.args.type == "illumina":
-            self.illumina_validate_barcodes(lane)
-        else:
-            self.mgi_validate_barcodes(lane)
-
-    def illumina_validate_barcodes(self, lane):
-        """
-        Validate all index sequences against each other to ensure they aren't in collision according to the chosen
-        number of mismatches parameter.
-        """
-        min_allowed_distance = (2 * self.number_of_mismatches) + 1
-
-        validated_indexes = []
-        collisions = []
-
-        for readset in self.readsets[lane]:
-            current_index = readset.index.replace('-', '')
-
-            for candidate_index in validated_indexes:
-                if distance(current_index, candidate_index) < min_allowed_distance:
-                    collisions.append("'" + current_index + "' and '" + candidate_index + "'")
-            validated_indexes.append(current_index)
-
-        if len(collisions) > 0:
-            _raise(SanitycheckError("Barcode collisions: " + ";".join(collisions)))
-
-    def mgi_validate_barcodes(self, lane):
         """
         Validate all index sequences against each other to ensure they aren't in collision according to the chosen
         number of mismatches parameter.
@@ -2918,10 +2892,16 @@ class RunProcessing(common.MUGQICPipeline):
 
         for readset in self.readsets[lane]:
             for current_index in readset.indexes:
-                if self.is_dual_index[lane]:
-                    current_barcode = current_index['INDEX2'][0:index_lengths[0]]+current_index['INDEX1'][0:index_lengths[1]]
+                if self.index2cycles[lane]:
+                    if 'mgi' in self.args.type:
+                        current_barcode = current_index['INDEX2'][0:index_lengths[0]]+current_index['INDEX1'][0:index_lengths[1]]
+                    else:
+                        current_barcode = current_index['INDEX1'][0:index_lengths[0]]+current_index['INDEX2'][0:index_lengths[1]]
                 else:
-                    current_barcode = current_index['INDEX1'][0:index_lengths[0]]
+                    if current_index['INDEX1']:
+                        current_barcode = current_index['INDEX1'][0:index_lengths[0]]
+                    else:
+                        current_barcode = current_index['INDEX2'][0:index_lengths[0]]
                 for candidate_index in validated_indexes:
                     if distance(current_barcode, candidate_index) < min_allowed_distance:
                         collisions.append("'" + current_barcode + "' and '" + candidate_index + "'")
@@ -3172,8 +3152,8 @@ class RunProcessing(common.MUGQICPipeline):
 
             for idx, readset_index in enumerate(readset.indexes):
                 # Barcode sequence should only match with the barcode cycles defined in the mask
-                # so we adjust the lenght of the index sequences accordingly for the "Sample_Barcode" field
-                if self.is_dual_index[lane]:
+                # so we adjust the length of the index sequences accordingly for the "Sample_Barcode" field
+                if "DUALINDEX" in set([readset.index_type for readset in self.readsets[lane]]):
                     sample_barcode = readset_index['INDEX1'][0:index_lengths[0]] + readset_index['INDEX2'][0:index_lengths[1]]
                 else:
                     sample_barcode = readset_index['INDEX1'][0:index_lengths[0]]
@@ -4175,11 +4155,31 @@ class RunProcessing(common.MUGQICPipeline):
         reads = Xml.parse(os.path.join(self.run_dir, "RunInfo.xml")).getroot().find('Run').find('Reads')
         return [ RunInfoRead(int(r.get("Number")), int(r.get("NumCycles")), r.get("IsIndexedRead") == "Y") for r in reads.iter('Read') ]
 
+    def get_seqtype_to_use(self, run_dir):
+        """
+        Parse the RunParameters.xml file for the 'SbsConsumableVersion'
+        If Version is '3', then seqtype should be considered as hiseqx instead of novaseq
+        i.e. Make NovaSeq behave like HiSeqX when Consumable Version is 3
+        """
+        if os.path.isfile(os.path.join(run_dir, "runParameters.xml")):
+            paramter_file = os.path.join(run_dir, "runParameters.xml")
+        elif os.path.isfile(os.path.join(run_dir, "RunParameters.xml")):
+            paramter_file = os.path.join(run_dir, "RunParameters.xml")
+        else:
+            _raise(SanitycheckError("Could not find runParamters.xml (neither RunParamters.xml) in " + run_dir + "."))
+
+        sbs_consumable_version = Xml.parse(paramter_file).getroot().find('RfidsInfo').find('SbsConsumableVersion').text
+        if sbs_consumable_version == '3':
+            return 'hiseqx'
+        else:
+            return self.seqtype
+
     def load_readsets(self, lane):
         """
         Parse the sample sheet and return a list of readsets.
         """
         if self.args.type == 'illumina':
+            seqtype = self.get_seqtype_to_use(self.run_dir)
             return parse_illumina_raw_readset_files(
                 self.output_dir,
                 self.run_dir,

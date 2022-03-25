@@ -370,6 +370,7 @@ def parse_illumina_raw_readset_files(
     seqtype
     ):
 
+    platform = "Illumina"
     readsets = []
     samples = []
     skipped_db = []
@@ -447,7 +448,6 @@ def parse_illumina_raw_readset_files(
                         else:
                             _raise(SanitycheckError("Could not find index " + key + " in index file file " + index_file + " Aborting..."))
                     readset._index = index_from_lims
-                    log.error(readset.index)
 
                     for adapter_line in adapter_csv:
                         if adapter_line :
@@ -498,7 +498,6 @@ def parse_illumina_raw_readset_files(
         readset.index_fastq1 = re.sub("_R1_", "_I1_", readset.fastq1) if index1cycles else None
         readset.index_fastq2 = re.sub("_R2_", "_I2_", readset.fastq2) if index2cycles else None
 
-        log.error("now getting the indexes !")
         readset._indexes = get_index(readset, index1cycles, index2cycles, seqtype) if index1cycles else None
 
         m = re.search("(?P<build>\w+):(?P<assembly>[\w\.]+)", readset.genomic_database)
@@ -1138,6 +1137,7 @@ def parse_nanopore_readset_file(nanopore_readset_file):
         log.error(dup_found_message)
         exit(18)
 
+    # If no duplicate readset was found, then parse the readset file
     readset_csv = csv.DictReader(open(nanopore_readset_file, 'r'), delimiter='\t')
     for line in readset_csv:
         sample_name = line['Sample']
@@ -1240,64 +1240,37 @@ def checkDuplicateReadsets(readset_file):
     return execption_message
 
 def get_index(
-        readset,
-        index1cycles,
-        index2cycles,
-        seqtype
-        ):
-        """
-        """
+    readset,
+    index1cycles,
+    index2cycles,
+    seqtype
+    ):
+    """
+    """
 
-        indexes = []
-        index1 = ""
-        index2 = ""
-        index1seq = ""
-        index2seq = ""
+    indexes = []
+    index1 = ""
+    index2 = ""
+    index1seq = ""
+    index2seq = ""
 
-        index_file = config.param('DEFAULT', 'index_settings_file', param_type='filepath', required=False)
-        if not (index_file and os.path.isfile(index_file)):
-            index_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "resources", 'adapter_settings_format.txt')
+    index_file = config.param('DEFAULT', 'index_settings_file', param_type='filepath', required=False)
+    if not (index_file and os.path.isfile(index_file)):
+        index_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "resources", 'adapter_settings_format.txt')
 
-        index_str_pattern = "grep '%s,' %s | head -n1"
-        if re.search("-", readset.index_name) and not re.search("SI-", readset.index_name):
-            index1 = readset.index_name.split("-")[0]
-            index2 = readset.index_name.split("-")[1]
-            index1_str = subprocess.check_output(index_str_pattern % (index1, index_file), shell=True, text=True).strip()
-            index2_str = subprocess.check_output(index_str_pattern % (index2, index_file), shell=True, text=True).strip()
-            index1_seq = index1_str.split(",")[1:]
-            index2_seq = index2_str.split(",")[1:]
-            if len(index1_seq) == len(index2_seq):
-                for (index1seq, index2seq) in zip(index1_seq, index2_seq):
-                    [actual_index1seq, actual_index2seq, adapteri7, adapteri5] = sub_get_index(readset, index1seq, index2seq, index1cycles, index2cycles, seqtype)
-                    indexes.append({
-                        'SAMPLESHEET_NAME': readset.name,
-                        'LIBRARY': readset.library,
-                        'PROJECT': readset.project_id,
-                        'INDEX_NAME': readset.index_name,
-                        'INDEX1': actual_index1seq,
-                        'INDEX2': actual_index2seq,
-                        'ADAPTERi7' : adapteri7,
-                        'ADAPTERi5' : adapteri5
-                    })
-            else:
-                error_msg = "Error: BAD INDEX DEFINITION for " + readset.name + "...\nDUALINDEX barcodes do not contain the same number of index sequences :\n"
-                error_msg += index1 + " : " + ",".join(index1_seq) + "\n"
-                error_msg += index2 + " : " + ",".join(index2_seq)
-                _raise(SanitycheckError(error_msg))
-
-        else:
-            index = readset.index_name
-            index_str = subprocess.check_output(index_str_pattern % (index, index_file), shell=True, text=True).strip()
-            index_seq = index_str.split(",")[1:]
-            char = ord("A")
-            for seq in index_seq:
-                if readset.library_type == "tenX_sc_RNA_v1":
-                    index2seq = seq
-                else:
-                    index1seq = seq
+    index_str_pattern = "grep '%s,' %s | head -n1"
+    if re.search("-", readset.index_name) and not re.search("SI-", readset.index_name):
+        index1 = readset.index_name.split("-")[0]
+        index2 = readset.index_name.split("-")[1]
+        index1_str = subprocess.check_output(index_str_pattern % (index1, index_file), shell=True, text=True).strip()
+        index2_str = subprocess.check_output(index_str_pattern % (index2, index_file), shell=True, text=True).strip()
+        index1_seq = index1_str.split(",")[1:]
+        index2_seq = index2_str.split(",")[1:]
+        if len(index1_seq) == len(index2_seq):
+            for (index1seq, index2seq) in zip(index1_seq, index2_seq):
                 [actual_index1seq, actual_index2seq, adapteri7, adapteri5] = sub_get_index(readset, index1seq, index2seq, index1cycles, index2cycles, seqtype)
                 indexes.append({
-                    'SAMPLESHEET_NAME': readset.name if len(index_seq) == 1 else readset.name + "_" + chr(char),
+                    'SAMPLESHEET_NAME': readset.name,
                     'LIBRARY': readset.library,
                     'PROJECT': readset.project_id,
                     'INDEX_NAME': readset.index_name,
@@ -1306,52 +1279,101 @@ def get_index(
                     'ADAPTERi7' : adapteri7,
                     'ADAPTERi5' : adapteri5
                 })
-                char += 1
+        else:
+            error_msg = "Error: BAD INDEX DEFINITION for " + readset.name + "...\nDUALINDEX barcodes do not contain the same number of index sequences :\n"
+            error_msg += index1 + " : " + ",".join(index1_seq) + "\n"
+            error_msg += index2 + " : " + ",".join(index2_seq)
+            _raise(SanitycheckError(error_msg))
 
-        return indexes
+    else:
+        index = readset.index_name
+        index_str = subprocess.check_output(index_str_pattern % (index, index_file), shell=True, text=True).strip()
+        index_seq = index_str.split(",")[1:]
+        char = ord("A")
+        for seq in index_seq:
+            if readset.library_type in ["tenX_sc_RNA_v1", "TELL-Seq"]:
+                index2seq = seq
+            else:
+                index1seq = seq
+            [actual_index1seq, actual_index2seq, adapteri7, adapteri5] = sub_get_index(readset, index1seq, index2seq, index1cycles, index2cycles, seqtype)
+            indexes.append({
+                'SAMPLESHEET_NAME': readset.name if len(index_seq) == 1 else readset.name + "_" + chr(char),
+                'LIBRARY': readset.library,
+                'PROJECT': readset.project_id,
+                'INDEX_NAME': readset.index_name,
+                'INDEX1': actual_index1seq,
+                'INDEX2': actual_index2seq,
+                'ADAPTERi7' : adapteri7,
+                'ADAPTERi5' : adapteri5
+            })
+            char += 1
+
+    return indexes
 
 def sub_get_index(
-        readset,
-        index1seq,
-        index2seq,
-        index1cycles,
-        index2cycles,
-        seqtype
-        ):
-        """
-        """
-        index_file = config.param('DEFAULT', 'index_settings_file', param_type='filepath', required=False)
-        if not (index_file and os.path.isfile(index_file)):
-            index_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "resources", 'adapter_settings_format.txt')
+    readset,
+    index1seq,
+    index2seq,
+    index1cycles,
+    index2cycles,
+    seqtype
+    ):
+    """
+    """
+    index_file = config.param('DEFAULT', 'index_settings_file', param_type='filepath', required=False)
+    if not (index_file and os.path.isfile(index_file)):
+        index_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "resources", 'adapter_settings_format.txt')
 
-        actual_index1seq='';
-        actual_index2seq='';
+    actual_index1seq='';
+    actual_index2seq='';
 
-        primer_seq_pattern = "grep -A8 '%s' %s | grep '_IDX_' | awk -F':' '{print $2}' | tr -d \"35\'\- \" | awk -F',' '{print $%d}'"
+    primer_seq_pattern = "grep -A8 '%s' %s | grep '_IDX_' | awk -F':' '{print $2}' | tr -d \"35\'\- \" | awk -F',' '{print $%d}'"
 
-        index1_primer = subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index 1") % (seqtype, index_file, 1), shell=True, text=True).strip()
-        index1_primeroffset = int(subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index 1") % (seqtype, index_file, 2), shell=True, text=True).strip())
-        index2_primer = subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index 2") % (seqtype, index_file, 1), shell=True, text=True).strip()
-        index2_primeroffset = int(subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index 2") % (seqtype, index_file, 2), shell=True, text=True).strip())
+    # TruSeq definition
+    indext1_primer = subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index 1") % (seqtype, index_file, 1), shell=True, text=True).strip()
+    indext1_primeroffset = int(subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index 1") % (seqtype, index_file, 2), shell=True, text=True).strip())
+    indext2_primer = subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index 2") % (seqtype, index_file, 1), shell=True, text=True).strip()
+    indext2_primeroffset = int(subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index 2") % (seqtype, index_file, 2), shell=True, text=True).strip())
 
-        main_seq_pattern = "grep -A4 '^%s:' %s | grep -E \"^3'|^5'\" | head -n 1 | sed \"s/5'//g\"  | sed \"s/3'//g\" | tr -d \" '\-\" | grep %s"
-        actual_seq_pattern = "echo %s | awk -F\"%s\" '{print $%d}' | sed \"%s\" | cut -c %s"
+    # Nexterra Definition
+    indexn1_primer = subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index N1") % (seqtype, index_file, 1), shell=True, text=True).strip()
+    indexn1_primeroffset = int(subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index N1") % (seqtype, index_file, 2), shell=True, text=True).strip())
+    indexn2_primer = subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index N2") % (seqtype, index_file, 1), shell=True, text=True).strip()
+    indexn2_primeroffset = int(subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index N2") % (seqtype, index_file, 2), shell=True, text=True).strip())
 
-        log.error("are we here yet ?")
-#        present = subprocess.check_output(main_seq_pattern % (readset.library_type, index_file, "-c " + index1_primer), shell=True, text=True).strip()
-        try:
-            present = subprocess.check_output(main_seq_pattern % (readset.library_type, index_file, "-c " + index1_primer), shell=True, text=True).strip()
-        except subprocess.CalledProcessError as exc:
-            present = exc.output
+    main_seq_pattern = "grep -A4 '^%s:' %s | grep -E \"^3'|^5'\" | head -n 1 | sed \"s/5'//g\"  | sed \"s/3'//g\" | tr -d \" '\-\" | grep %s"
+    actual_seq_pattern = "echo %s | awk -F\"%s\" '{print $%d}' | sed \"%s\" | cut -c %s"
 
-        if present == "1":
+    try:
+        truseq_1 = subprocess.check_output(main_seq_pattern % (readset.library_type, index_file, "-c " + indext1_primer), shell=True, text=True).strip()
+    except subprocess.CalledProcessError as exc:
+        truseq_1 = exc.output
+    try:
+        truseq_2 = subprocess.check_output(main_seq_pattern % (readset.library_type, index_file, "-c " + indext2_primer), shell=True, text=True).strip()
+    except subprocess.CalledProcessError as exc:
+        truseq_2 = exc.output
 
-            main_seq = subprocess.check_output(main_seq_pattern % (readset.library_type, index_file, index1_primer), shell=True, text=True).strip()
+    if truseq_1 == '1':
+        index1_primer = indext1_primer
+        index1_primeroffset = indext1_primeroffset
+    else:
+        index1_primer = indexn1_primer
+        index1_primeroffset = indexn1_primeroffset
+    if truseq_2 == '1':
+        index2_primer = indext2_primer
+        index2_primeroffset = indext2_primeroffset
+    else:
+        index2_primer = indexn2_primer
+        index2_primeroffset = indexn2_primeroffset
 
-            if len(index1seq) < int(index1cycles):
-                index1_primer_seq = index1_primer[:len(index1seq)-int(index1cycles)]
-            else:
-                index1_primer_seq = index1_primer
+    if index1cycles:
+        main_seq = subprocess.check_output(main_seq_pattern % (readset.library_type, index_file, index1_primer), shell=True, text=True).strip()
+
+        if len(index1seq) < int(index1cycles):
+            index1_primer_seq = index1_primer[:len(index1seq)-int(index1cycles)]
+        else:
+            index1_primer_seq = index1_primer
+        if index1_primer_seq:
             if readset.library_type == 'tenX_sc_RNA_v1' or readset.library_type == 'TELL-Seq':
                 actual_index1seq = ""
             elif seqtype in ["dnbseqg400", "dnbseqt7"] and readset.run_type == "PAIRED_END":
@@ -1359,53 +1381,24 @@ def sub_get_index(
             else:
                 actual_index1seq = subprocess.check_output(actual_seq_pattern % (main_seq, index1_primer_seq, 2, "s/\[i7\]/"+index1seq+"/g", str(index1_primeroffset+1)+"-"+str(index1_primeroffset+int(index1cycles))), shell=True, text=True).strip()
 
-            log.error("and here ???")
-            if index2cycles:
-                main_seq = subprocess.check_output(main_seq_pattern.replace("| head -n 1 |", "|") % (readset.library_type, index_file, index2_primer), shell=True, text=True).strip()
+    if index2cycles:
+        main_seq = subprocess.check_output(main_seq_pattern.replace("| head -n 1 |", "|") % (readset.library_type, index_file, index2_primer), shell=True, text=True).strip()
 
-                if len(index2seq) < int(index2cycles):
-                    index2_primer_seq = index2_primer[:len(index2seq)-int(index2cycles)]
-                else:
-                    index2_primer_seq = index2_primer
-                if seqtype in ["hiseqx", "hiseq4000", "iSeq"] or (seqtype in ["dnbseqg400", "dnbseqt7"] and readset.run_type == "PAIRED_END"):
-                    actual_index2seq = subprocess.check_output(actual_seq_pattern.replace("| cut -c", "| rev | cut -c") % (main_seq, index2_primer_seq, 1, "s/\[i5c\]/$(echo "+index2seq+" | tr 'ATGC' 'TACG' )/g", str(index2_primeroffset+1)+"-"+str(index2_primeroffset+int(index2cycles))), shell=True, text=True).strip()
-                else:
-                    actual_index2seq = subprocess.check_output(actual_seq_pattern % (main_seq, index2_primer_seq, 2, "s/\[i5\]/"+index2seq+"/g", str(index2_primeroffset+1)+"-"+str(index2_primeroffset+int(index2cycles))), shell=True, text=True).strip()
-
+        if len(index2seq) < int(index2cycles):
+            index2_primer_seq = index2_primer[:len(index2seq)-int(index2cycles)]
         else:
-            indexn1_primer = subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index N1") % (seqtype, index_file, 1), shell=True, text=True).strip()
-            indexn1_primeroffset = int(subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index N1") % (seqtype, index_file, 2), shell=True, text=True).strip())
-            indexn2_primer = subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index N2") % (seqtype, index_file, 1), shell=True, text=True).strip()
-            indexn2_primeroffset = int(subprocess.check_output(primer_seq_pattern.replace("_IDX_", "Index N2") % (seqtype, index_file, 2), shell=True, text=True).strip())
-
-            main_seq = subprocess.check_output(main_seq_pattern % (readset.library_type, index_file, indexn1_primer), shell=True, text=True).strip()
-
-            if len(index1seq) < int(index1cycles):
-                indexn1_primer_seq = indexn1_primer[:len(index1seq)-int(index1cycles)]
+            index2_primer_seq = index2_primer
+        if index2_primer_seq:
+            if seqtype in ["hiseqx", "hiseq4000", "iSeq"] or (seqtype in ["dnbseqg400", "dnbseqt7"] and readset.run_type == "PAIRED_END"):
+                actual_index2seq = subprocess.check_output(actual_seq_pattern.replace("| cut -c", "| rev | cut -c") % (main_seq, index2_primer_seq, 1, "s/\[i5c\]/$(echo "+index2seq+" | tr 'ATGC' 'TACG' )/g", str(index2_primeroffset+1)+"-"+str(index2_primeroffset+int(index2cycles))), shell=True, text=True).strip()
             else:
-                indexn1_primer_seq = indexn1_primer
-            if seqtype in ["dnbseqg400", "dnbseqt7"] and readset.run_type == "PAIRED_END":
-                actual_index1seq = subprocess.check_output(actual_seq_pattern % (main_seq, indexn1_primer_seq, 2, "s/\[i7\]/"+index1seq+"/g", str(indexn1_primeroffset+1)+"-"+str(indexn1_primeroffset+int(index1cycles)))+" | tr 'ATGC' 'TACG' | rev", shell=True, text=True).strip()
-            else:
-                actual_index1seq = subprocess.check_output(actual_seq_pattern % (main_seq, indexn1_primer_seq, 2, "s/\[i7\]/"+index1seq+"/g", str(indexn1_primeroffset+1)+"-"+str(indexn1_primeroffset+int(index1cycles))), shell=True, text=True).strip()
+                actual_index2seq = subprocess.check_output(actual_seq_pattern % (main_seq, index2_primer_seq, 2, "s/\[i5\]/"+index2seq+"/g", str(index2_primeroffset+1)+"-"+str(index2_primeroffset+int(index2cycles))), shell=True, text=True).strip()
 
-            if index2cycles:
-                main_seq = subprocess.check_output(main_seq_pattern.replace("| head -n 1 |", "|") % (readset.library_type, index_file, indexn2_primer), shell=True, text=True).strip()
+    main_seq = subprocess.check_output(main_seq_pattern % (readset.library_type, index_file, "\[i7\]"), shell=True, text=True).strip()
+    adapteri7 = subprocess.check_output("echo \"%s\" | awk -F\'\\\[i7\\\]\' '{print $1}' | awk -F\'\\\]\' '{print $NF}'" % (main_seq), shell=True, text=True).strip()
 
-                if len(index2seq) < int(index2cycles):
-                    indexn2_primer_seq = indexn2_primer[:len(index2seq)-int(index2cycles)]
-                else:
-                    indexn2_primer_seq = indexn2_primer
-                if seqtype in ["hiseqx", "hiseq4000", "iSeq"] or (seqtype in ["dnbseqg400", "dnbseqt7"] and readset.run_type == "PAIRED_END"):
-                    actual_index2seq = subprocess.check_output(actual_seq_pattern.replace("| cut -c", "| rev | cut -c") % (main_seq, indexn2_primer_seq, 1, "s/\[i5c\]/$(echo "+index2seq+" | tr 'ATGC' 'TACG' )/g", str(indexn2_primeroffset+1)+"-"+str(indexn2_primeroffset+index2cycles)), shell=True, text=True).strip()
-                else :
-                    actual_index2seq = subprocess.check_output(actual_seq_pattern % (main_seq, indexn2_primer_seq, 2, "s/\[i5\]/"+index2seq+"/g", str(indexn2_primeroffset+1)+"-"+str(indexn2_primeroffset+int(index2cycles))), shell=True, text=True).strip()
+    main_seq = subprocess.check_output(main_seq_pattern.replace("| head -n 1 |", "|") % (readset.library_type, index_file, "\[i5c\]"), shell=True, text=True).strip()
+    adapteri5 = subprocess.check_output("echo \"%s\" | awk -F\'\\\[i5c\\\]\' '{print $2}' | awk -F\'\\\[\' '{print $1}' | rev" % (main_seq), shell=True, text=True).strip()
 
-        main_seq = subprocess.check_output(main_seq_pattern % (readset.library_type, index_file, "\[i7\]"), shell=True, text=True).strip()
-        adapteri7 = subprocess.check_output("echo \"%s\" | awk -F\'\\\[i7\\\]\' '{print $1}' | awk -F\'\\\]\' '{print $NF}'" % (main_seq), shell=True, text=True).strip()
-
-        main_seq = subprocess.check_output(main_seq_pattern.replace("| head -n 1 |", "|") % (readset.library_type, index_file, "\[i5c\]"), shell=True, text=True).strip()
-        adapteri5 = subprocess.check_output("echo \"%s\" | awk -F\'\\\[i5c\\\]\' '{print $2}' | awk -F\'\\\[\' '{print $1}' | rev" % (main_seq), shell=True, text=True).strip()
-
-        return [actual_index1seq, actual_index2seq, adapteri7, adapteri5]
+    return [actual_index1seq, actual_index2seq, adapteri7, adapteri5]
 

@@ -6,6 +6,8 @@ module_bismark=mugqic/bismark/0.21.0
 module_bowtie=mugqic/bowtie/1.2.2
 module_bowtie2=mugqic/bowtie2/2.3.5
 module_bwa=mugqic/bwa/0.7.17
+module_cellranger=mugqic/cellranger/6.1.1
+module_cellranger_atac=mugqic/cellranger-arc/2.0.0
 module_java=mugqic/java/openjdk-jdk1.8.0_72
 module_mugqic_tools=mugqic/mugqic_tools/2.4.0
 module_mugqic_R_packages=mugqic/mugqic_R_packages/1.0.6
@@ -310,7 +312,7 @@ cmd_or_job() {
     echo "Submitting $JOB_PREFIX as job..."
     echo
     if [[ $HOST == abacus* ]]; then
-      echo "${!CMD}" | qsub -m ae -M $JOB_MAIL -A $RAP_ID -W umask=0002 -d $INSTALL_DIR -j oe -o $LOG_DIR/${JOB_PREFIX}_$TIMESTAMP.log -N $JOB_NAME -q qfat256 -l pmem=256000m -l walltime=12:00:0 -l nodes=1:ppn=$CORES
+      echo "${!CMD}" | qsub -m ae -M $JOB_MAIL -A $RAP_ID -W umask=0002 -d $INSTALL_DIR -j oe -o $LOG_DIR/${JOB_PREFIX}_$TIMESTAMP.log -N $JOB_NAME -l pmem=256000m -l walltime=12:00:0 -l nodes=1:ppn=$CORES
     else      
       echo "#! /bin/bash 
       ${!CMD}" | \
@@ -590,7 +592,7 @@ create_10x_references() {
   if ! is_up2date $INDEX_DIR/refdata-cellranger-$ASSEMBLY-*/fasta
   then
     echo
-    echo "Creating 10X scRNA reference and index..."
+    echo "Creating Cellranger reference and index..."
     echo
     CELLRANGER_CMD="\
 mkdir -p $INDEX_DIR && \
@@ -598,13 +600,78 @@ module load $module_cellranger && \
 LOG=$LOG_DIR/cellranger_$TIMESTAMP.log && \
 ERR=$LOG_DIR/cellranger_$TIMESTAMP.err && \
 cd $INDEX_DIR && \
-mkgtf $ANNOTATIONS_DIR/$GTF output.gtf --attribute=key:allowable_value > \$LOG 2> \$ERR && \
-cellranger mkref --genome=refdata-cellranger-$ASSEMBLY-c3g --fasta=$GENOME_DIR/$GENOME_FASTA --genes=output.gtf >> \$LOG 2>> \$ERR && \
-rm -f output.gtf && \
+cellranger mkref --genome=refdata-cellranger-$ASSEMBLY-c3g --fasta=$GENOME_DIR/$GENOME_FASTA --genes=$ANNOTATIONS_DIR/$GTF >> \$LOG 2>> \$ERR && \
 chmod -R ug+rwX,o+rX $INDEX_DIR \$LOG \$ERR"
+    cmd_or_job CELLRANGER_CMD $runThreadN CELLRANGER_CMD 360G
   else
     echo
     echo "Cellranger index up to date... skipping"
+    echo
+  fi
+  if ! is_up2date $INDEX_DIR/refdata-cellranger-atac-$ASSEMBLY-*/fasta
+  then 
+    echo 
+    echo "Creating Cellrange-atac reference and index..."
+    echo
+    motifs_url="http://jaspar2022.genereg.net/download/data/2022/CORE/JASPAR2022_CORE_non-redundant_pfms_jaspar.txt"
+    motifs_in="$INDEX_DIR/JASPAR2022_CORE_vertebrates_non-redundant_pfms_jaspar.txt"
+    echo "    - Fetching JASPAR PFMs table..."
+    if [ ! -f "$motifs_in" ]; then
+        curl -sS $motifs_url > $motifs_in
+    fi
+    # Change motif headers so the human-readable motif name precedes the motif
+    # identifier. So ">MA0004.1    Arnt" -> ">Arnt_MA0004.1".
+    echo "    - Updating the JASPAR table..."
+    motifs_modified="$INDEX_DIR/$(basename "$motifs_in").modified"
+    awk '{
+  if ( substr($1, 1, 1) == ">" ) {
+    print ">" $2 "_" substr($1,2)
+  } else {
+    print
+  }
+}'  $motifs_in > $motifs_modified
+    echo "    - Creating config file..."
+    echo
+    config=$INDEX_DIR/config.txt
+    echo """{
+    organism: \"$SPECIES\"
+    genome: [\""refdata-cellranger-arc-$ASSEMBLY-c3g"\"]
+    input_fasta: [\""$GENOME_DIR/$GENOME_FASTA"\"]
+    input_gtf: [\""$ANNOTATIONS_DIR/$GTF"\"]
+    input_motifs: \""$motifs_modified"\"
+    non_nuclear_contigs: [\"MT\"]
+}""" > $config
+    CELLRANGER_ATAC_CMD="\
+mkdir -p $INDEX_DIR && \
+module load $module_cellranger_atac && \
+LOG=$LOG_DIR/cellranger_atac_$TIMESTAMP.log && \
+ERR=$LOG_DIR/cellranger_atac_$TIMESTAMP.err && \
+cd $INDEX_DIR && \
+cellranger-arc mkref --config=$config >> \$LOG 2>> \$ERR && \
+chmod -R ug+rwX,o+rX $INDEX_DIR \$LOG \$ERR"
+    cmd_or_job CELLRANGER_ATAC_CMD $runThreadN CELLRANGER_ATAC_CMD 360G
+  else 
+    echo 
+    echo "Cellranger-arc index up to date... skipping"
+    echo 
+  fi
+  if ! is_up2date $INDEX_DIR/refdata-cellranger-vdj-$ASSEMBLY-*/fasta
+  then
+    echo
+    echo "Creating Cellranger VDJ reference and index..."
+    echo
+    CELLRANGER_CMD="\
+mkdir -p $INDEX_DIR && \
+module load $module_cellranger && \
+LOG=$LOG_DIR/cellranger_$TIMESTAMP.log && \
+ERR=$LOG_DIR/cellranger_$TIMESTAMP.err && \
+cd $INDEX_DIR && \
+cellranger mkvdjref --genome=refdata-cellranger-vdj-$ASSEMBLY-c3g --fasta=$GENOME_DIR/$GENOME_FASTA --genes=$ANNOTATIONS_DIR/$GTF >> \$LOG 2>> \$ERR && \
+chmod -R ug+rwX,o+rX $INDEX_DIR \$LOG \$ERR"
+    cmd_or_job CELLRANGER_CMD $runThreadN CELLRANGER_CMD 360G
+  else
+    echo
+    echo "Cellranger VDJ index up to date... skipping"
     echo
   fi
 }
@@ -942,10 +1009,10 @@ build_files() {
   create_picard_index
   create_samtools_index
   create_bwa_index
-  create_genome_digest
+#  create_genome_digest
   create_bismark_genome_reference
-  create_bowtie_index
-  create_bowtie2_tophat_index
+#  create_bowtie_index
+#  create_bowtie2_tophat_index
 
   if is_up2date $ANNOTATIONS_DIR/$NCRNA
   then
@@ -971,7 +1038,7 @@ build_files() {
 
   if is_up2date $ANNOTATIONS_DIR/$GTF
   then
-    create_star_index
+#    create_star_index
     create_10x_references
     create_gene_annotations
     create_gene_annotations_flat

@@ -17,6 +17,7 @@
 # along with MUGQIC Pipelines.  If not, see <http://www.gnu.org/licenses/>.
 ################################################################################
 
+import sys
 import os
 import re
 import json
@@ -60,11 +61,13 @@ def create(pipeline, sample):
             'uniref_db' : config.param("DEFAULT", 'uniref_db'),
             'pfam_db' : config.param("DEFAULT", 'pfam_db')
         }
-    elif pipeline.__class__.__name__ == "IlluminaRunProcessing":
+    elif pipeline.__class__.__name__ == "RunProcessing":
         general_info = {
-            'analysed_species' : config.param("DEFAULT", 'scientific_name'),
-            'assembly_used' : config.param("DEFAULT", 'assembly'),
-            'assembly_source' : config.param("DEFAULT", 'source')
+            'run_id' : pipeline.run_id,
+            'platform' : pipeline.args.type,
+            'instrument': pipeline.instrument,
+            "flowcell": pipeline.flowcell_id,
+            "project_id": list(set([readset.project_id for readset in sample.readsets]))[0],
         }
     elif pipeline.__class__.__name__ == "RunProcessing":
         general_info = {
@@ -182,7 +185,7 @@ def create(pipeline, sample):
                     'step': []
                 }   
             }
-        else :
+        else:
             json_hash = {
                 'version': jsonator_version,
                 'project': project_name,

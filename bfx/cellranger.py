@@ -27,19 +27,20 @@ from core.job import Job
 from core.config import config
 
 def count(
-    input_fastqs,
+    inputs,
     output,
-    readset_name,
-    ref_dir
+    sample_id,
+    sample_name,
+    project,
+    ref_dir,
+    ini_section='cellranger_count'
     ):
 
     return Job(
-        input_fastqs,
+        inputs,
+        [output],
         [
-            output 
-        ],
-        [
-            ['cellranger_count', 'module_cellranger'] 
+            [ini_section, 'module_cellranger'] 
         ],
         command="""\
 mkdir -p {folder} && \\
@@ -48,14 +49,86 @@ cellranger count \\
   --id={id} \\
   --transcriptome={ref} \\
   --fastqs={input} \\
+  --project={project} \\
   --sample={sample} \\
   {other_options}""".format(
             folder=os.path.dirname(os.path.dirname(os.path.dirname(output))),
-            id=os.path.basename(os.path.dirname(os.path.dirname(output))),
+            id=sample_id,
+            project=project,
             ref=ref_dir,
-            input=os.path.dirname(input_fastqs[0]),
-            sample=readset_name,
-            other_options=config.param('cellranger_count', 'cellranger_other_options', required=False)
+            input=os.path.dirname(inputs[0]),
+            sample=sample_name,
+            other_options=config.param(ini_section, 'other_options', required=False)
         )
     )
 
+def atac(
+    inputs,
+    output,
+    sample_id,
+    sample_name,
+    project,
+    ref_dir,
+    ini_section='cellranger_atac'
+    ):
+
+    return Job(
+        inputs,
+        [output],
+        [
+            [ini_section, 'module_cellranger_atac']
+        ],
+        command="""\
+mkdir -p {folder} && \\
+cd {folder} && \\
+cellranger-atac count \\
+  --id={id} \\
+  --reference={ref} \\
+  --fastqs={input} \\
+  --project={project} \\
+  --sample={sample} \\
+  {other_options}""".format(
+            folder=os.path.dirname(os.path.dirname(os.path.dirname(output))),
+            id=sample_id,
+            project=project,
+            ref=ref_dir,
+            input=os.path.dirname(inputs[0]),
+            sample=sample_name,
+            other_options=config.param(ini_section, 'other_options', required=False)
+        )
+    )
+
+def vdj(
+    inputs,
+    output,
+    sample_id,
+    sample_name,
+    project,
+    ref_dir,
+    ini_section='cellranger_vdj'
+    ):
+
+    return Job(
+        inputs,
+        [output],
+        [
+            [ini_section, 'module_cellranger']
+        ],
+        command="""\
+mkdir -p {folder} && \\
+cd {folder} && \\
+cellranger vdj \\
+  --id={sample_id} \\
+  --reference={ref} \\
+  --fastqs={input} \\
+  --project={project} \\
+  --sample={sample} \\
+  {other_options}""".format(
+            folder=os.path.dirname(os.path.dirname(os.path.dirname(output))),
+            id=sample_id,
+            project=project,
+            ref=ref_dir,
+            input=os.path.dirname(inputs[0]),
+            other_options=config.param(ini_section, 'other_options', required=False)
+        )
+    )

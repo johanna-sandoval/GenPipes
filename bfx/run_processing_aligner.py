@@ -68,8 +68,14 @@ class RunProcessingAligner(object):
     def get_metrics_jobs(self, readset):
         raise NotImplementedError("Please Implement this method")
 
+    def get_fastq_metrics_jobs(self, readset):
+        return[]
+
     def get_annotation_files(self):
         raise NotImplementedError("Please Implement this method")
+
+    def is_run_mark_duplicate(self):
+        return True
 
     @staticmethod
     def get_rg_tag(readset, platform, ini_section):
@@ -581,8 +587,6 @@ class CellrangerRunProcessingAligner(RNARunProcessingAligner):
                     if config.has_option("DEFAULT", "assembly_synonyms"):
                         synonym = config.get("DEFAULT", "assembly_synonyms")
                         trans_path = self.find_10x_synonym_reference(self.genome_folder, synonym, "10x_transcriptome")
-            else:
-                log.error("ooops")
 
             return trans_path
         else:
@@ -604,14 +608,23 @@ class CellrangerRunProcessingAligner(RNARunProcessingAligner):
 
         outdir = os.path.join(
             self.output_dir,
-            config.param('cellranger_count', 'working_dir', required=True) + "_" + readset.lane_str,
+            "10x_cellcount." + readset.lane,
             readset.name + "_" + readset.sample_number,
             "outs"
         )
         default_bam_name = "possorted_genome_bam"
-        input_bam = os.path.join(outdir, default_bam_name) + ".bam"
-        input_bai = os.path.join(outdir, default_bam_name) + ".bam.bai"
-        input_summary = os.path.join(outdir, "web_summary.html")
+        tmp_bam = os.path.join(outdir, readset.name + "." + default_bam_name + ".bam")
+        tmp_bai = os.path.join(outdir, readset.name + "." + default_bam_name + ".bam.bai")
+        tmp_summary = os.path.join(outdir, "web_summary.html")
+        cell_count_job = cellranger.count(
+            inputs=[readset.fastq1,readset.fastq2],
+            output=tmp_bam,
+            sample_id=readset.name + "_" + readset.sample_number,
+            sample_name=readset.name,
+            project=readset.project,
+            ref_dir=self.get_reference_index()
+        )
+
         output_bam = readset.bam + ".bam"
         output_bai = readset.bam + ".bai"
         output_summary = readset.bam + ".10x_summary.html"
@@ -621,15 +634,15 @@ class CellrangerRunProcessingAligner(RNARunProcessingAligner):
                 bash.mkdir(os.path.dirname(readset.bam + ".bam")),
                 cell_count_job,
                 bash.cp(
-                    input_bam,
+                    tmp_bam,
                     output_bam
                 ),
                 bash.cp(
-                    input_bai,
+                    tmp_bai,
                     output_bai
                 ),
                 bash.cp(
-                    input_summary,
+                    tmp_summary,
                     output_summary
                 ),
                 bash.zip(
@@ -639,9 +652,98 @@ class CellrangerRunProcessingAligner(RNARunProcessingAligner):
                 )
             ],
             name="cellranger_count." + readset.name + "." + readset.run + "." + readset.lane,
-            samples=[readset.sample]
+            samples=[readset.sample],
+            input_dependency=[readset.fastq1,readset.fastq2],
+            output_dependency=[output_bam, output_bai, output_summary, output_zip]
         )
         return job
+
+class VdjRunProcessingAligner(RNARunProcessingAligner):
+    def get_annotation_files(self):
+        return []
+
+    def is_run_mark_duplicate(self):
+        return False
+
+    def get_reference_index(self):
+        assembly_name = os.path.basename(self.genome_folder)
+        ini_file = os.path.join(self.genome_folder + os.sep + assembly_name + ".ini")
+        if os.path.isfile(ini_file):
+            config.parse_files([ini_file])
+            trans_path = ""
+
+            if config.has_option("DEFAULT", "10x_vdj_transcriptome"):
+                transcriptome = config.get("DEFAULT", "10x_vdj_transcriptome")
+                trans_path = os.path.join(self.genome_folder, "genome", "10xGenomics", transcriptome)
+
+            if trans_path is None or not os.path.isdir(trans_path):
+                """ Main transcriptome not found, we will try to resolve it if synomym exists """
+                if config.has_option("DEFAULT", "assembly_synonyms"):
+                    synonym = config.get("DEFAULT", "assembly_synonyms")
+                    trans_path = self.find_10x_synonym_reference(self.genome_folder, synonym, "10x_vdj_transcriptome")
+            return trans_path
+        else:
+            return ""
+
+    def get_reference_file(self):
+        return os.path.join(self.get_reference_index(), "fasta", "regions.fa")
+
+    def get_alignment_job(self, readset):
+        outdir = os.path.join(
+            self.output_dir,
+            "10x_cellcount." + readset.lane,
+            readset.name + "_" + readset.sample_number,
+            "outs"
+        )   
+        default_bam_name = "consensus"
+        tmp_bam = os.path.join(outdir, readset.name + "." + default_bam_name + ".bam")
+        tmp_bai = os.path.join(outdir, readset.name + "." + default_bam_name + ".bam.bai")
+        tmp_summary = os.path.join(outdir, "web_summary.html")
+        cell_vdj_job = cellranger.vdj(
+            inputs=[readset.fastq1,readset.fastq2],
+            output=tmp_bam,
+            sample_id=readset.name + "_" + readset.sample_number,
+            sample_name=readset.name,
+            project=readset.project,
+            ref_dir=self.get_reference_index()
+        )
+
+        output_bam = readset.bam + ".bam"
+        output_bai = readset.bam + ".bai"
+        output_summary = readset.bam + ".10x_summary.html"
+        output_zip = readset.bam + "." + readset.run + "." + readset.lane + ".10x_outputs.zip"
+        job = concat_jobs(
+            [
+                bash.mkdir(os.path.dirname(readset.bam + ".bam")),
+                cell_vdj_job,
+                bash.cp(
+                    tmp_bam,
+                    output_bam
+                ),
+                bash.cp(
+                    tmp_bai,
+                    output_bai
+                ),
+                bash.cp(
+                    tmp_summary,
+                    output_summary
+                ),
+                bash.zip(
+                    outdir,
+                    output_zip,
+                    recursive=True
+                )
+            ],
+            name="cellranger_vdj." + readset.name + "." + readset.run + "." + readset.lane,
+            samples=[readset.sample],
+            input_dependency=[readset.fastq1,readset.fastq2],
+            output_dependency=[output_bam, output_bai, output_summary, output_zip]
+        )
+        return job
+
+    def get_metrics_jobs(self, readset):
+        jobs = []
+        return jobs
 
 class AtacRunProcessingAligner(RNARunProcessingAligner):
     def get_reference_index(self):
@@ -668,25 +770,25 @@ class AtacRunProcessingAligner(RNARunProcessingAligner):
         return os.path.join(self.get_reference_index(), "fasta", "genome.fa")
 
     def get_alignment_job(self, readset):
-        cell_atac_job = cellranger.atac(
-            reads1=readset.fastq1,
-            reads2=readset.fastq2,
-            sample_id=readset.name + "_" + readset.sample_number,
-            lane_id=readset.lane,
-            project=readset.project,
-            fastqs=os.path.dirname(readset.fastq1),
-            reference=self.get_reference_index()
-        )
         outdir = os.path.join(
             self.output_dir,
-            config.param('cellranger_atac', 'working_dir', required=True) + "_" + readset.lane,
+            "10x_cellcount." + readset.lane,
             readset.name + "_" + readset.sample_number,
             "outs"
         )
         default_bam_name = "possorted_bam"
-        input_bam = os.path.join(outdir, default_bam_name) + ".bam"
-        input_bai = os.path.join(outdir, default_bam_name) + ".bam.bai"
-        input_summary = os.path.join(outdir, "web_summary.html")
+        tmp_bam = os.path.join(outdir, readset.name + "." + default_bam_name + ".bam")
+        tmp_bai = os.path.join(outdir, readset.name + "." + default_bam_name + ".bam.bai")
+        tmp_summary = os.path.join(outdir, "web_summary.html")
+        cell_atac_job = cellranger.atac(
+            inputs=[readset.fastq1,readset.fastq2],
+            output=tmp_bam,
+            sample_id=readset.name + "_" + readset.sample_number,
+            sample_name=readset.name,
+            project=readset.project,
+            ref_dir=self.get_reference_index()
+        )
+
         output_bam = readset.bam + ".bam"
         output_bai = readset.bam + ".bai"
         output_summary = readset.bam + ".10x_summary.html"
@@ -696,24 +798,27 @@ class AtacRunProcessingAligner(RNARunProcessingAligner):
                 bash.mkdir(os.path.dirname(readset.bam + ".bam")),
                 cell_atac_job,
                 bash.cp(
-                    input_bam,
+                    tmp_bam,
                     output_bam
                 ),
                 bash.cp(
-                    input_bai,
+                    tmp_bai,
                     output_bai
                 ),
                 bash.cp(
-                    input_summary,
+                    tmp_summary,
                     output_summary
                 ),
-                Job(
-                    output_files=[output_zip],
-                    command="cd " + outdir + " && zip -r " + output_zip + " *"
+                bash.zip(
+                    outdir,
+                    output_zip,
+                    recursive=True
                 )
             ],
             name="cellranger_atac." + readset.name + "." + readset.run + "." + readset.lane,
-            samples=[readset.sample]
+            samples=[readset.sample],
+            input_dependency=[readset.fastq1,readset.fastq2],
+            output_dependency=[output_bam, output_bai, output_summary, output_zip]
         )
         return job
 
