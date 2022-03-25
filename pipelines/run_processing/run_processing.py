@@ -2980,7 +2980,7 @@ class RunProcessing(common.MUGQICPipeline):
         nb_total_index_base_used = 0
 
         index_cycles = [int(self.index1cycles[lane])]
-        if self.is_dual_index[lane]:
+        if self.index2cycles[lane]:
             index_cycles.insert(0, int(self.index2cycles[lane]))
 
         mask = self.read1cycles[lane] + 'T'
@@ -3252,7 +3252,7 @@ class RunProcessing(common.MUGQICPipeline):
             for idx, readset_index in enumerate(readset.indexes):
                 # Barcode sequence should only match with the barcode cycles defined in the mask
                 # so we adjust thw lenght of the index sequences accordingly for the "Sample_Barcode" field
-                if self.is_dual_index[lane]:
+                if "DUALINDEX" in set([readset.index_type for readset in self.readsets[lane]]):
                     sample_barcode = readset_index['INDEX2'][0:index_lengths[0]] + readset_index['INDEX1'][0:index_lengths[1]]
                 else:
                     sample_barcode = readset_index['INDEX1'][0:index_lengths[0]]
