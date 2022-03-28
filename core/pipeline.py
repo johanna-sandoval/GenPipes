@@ -423,7 +423,8 @@ class Pipeline(object):
                 _raise(SanitycheckError("Directory path \"" + self.portal_output_dir + "\" does not exist or is not a valid directory!"))
             else:
                 for sample in self.sample_list:
-                    self.sample_paths.append(jsonator.create(self, sample))
+                    if not isinstance(sample, str):
+                        self.sample_paths.append(jsonator.create(self, sample))
 
         log.info("TOTAL: " + str(len(self.jobs)) + " job" + ("s" if len(self.jobs) > 1 else "") + " created" + ("" if self.jobs else "... skipping") + "\n")
 

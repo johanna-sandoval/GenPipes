@@ -2070,7 +2070,7 @@ class RunProcessing(common.MUGQICPipeline):
         for lane in self.lanes:
             lane_jobs =[]
             for readset in [readset for readset in self.readsets[lane] if readset.bam]:
-                sequence_dictionary = (re.sub(r"\.[^.]+$", "", readset.reference_file) + ".dict")
+                sequence_dictionary = readset.dictionary_file
 
                 if not (os.path.exists(sequence_dictionary)):
                     sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath', required=False)
@@ -3290,9 +3290,6 @@ class RunProcessing(common.MUGQICPipeline):
                     sample_barcode = readset_index['INDEX2'][0:index_lengths[0]] + readset_index['INDEX1'][0:index_lengths[1]]
                 else:
                     sample_barcode = readset_index['INDEX1'][0:index_lengths[0]]
-                    log.error(readset_index['INDEX1'])
-                    log.error(index_lengths)
-                    log.error(sample_barcode)
                 if self.last_index < len(sample_barcode):
                     sample_barcode = sample_barcode[0:self.last_index]
                 if self.first_index > 1:
