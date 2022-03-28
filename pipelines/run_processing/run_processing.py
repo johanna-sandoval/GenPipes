@@ -57,7 +57,7 @@ import utils
 from bfx import ngscheckmate
 from bfx import bamixchecker
 from bfx import gatk
-from bfx.sequence_dictionary import *
+from bfx.sequence_dictionary import split_by_size
 from bfx import sambamba
 
 from pipelines import common
@@ -1605,561 +1605,6 @@ class RunProcessing(common.MUGQICPipeline):
         else:
             return self.throttle_jobs(jobs)
 
-    def checkmate_samplemixup(self):
-        """
-        Check the sample mixup using NGSCheckmate. FASTQ files are used as the inputs for the analysis
-        Only human samples can be processed.
-        """
-        jobs = []
-        jobs.extend(self.checkmate_samplemixup_by_lane())
-        jobs.extend(self.checkmate_samplemixup_by_run())
-
-        return self.throttle_jobs(jobs)
-
-    def checkmate_samplemixup_by_lane(self):
-        """
-        Check the sample mixup using NGSCheckmate by lane. FASTQ files are used as the inputs for the analysis
-        Only human samples can be processed. If there are at least one human sample in the run, every sample in a lane
-        is assume as human and run NGSCheckmate for all the samples in a lane
-        If there is only one sample in a lane, it will be skipped
-        """
-        jobs = []
-
-        #get all species in all the lanes and readsets and create a list
-
-        #it doesn't check which species you have it always performs the analysis for humans. But there should be at
-        # least one human sample in the whole run to perform the NGScheckmate analysis
-        # as reference genome file is obtained from the event file
-
-        # do not change below values. They are predefined by the tool
-        output_file_names = ["output_all.txt", "output_corr_matrix.txt", "output_matched.txt"]
-
-        all_ref_genome_paths = list(
-            set([readset.reference_file for lane in self.lanes for readset in self.readsets[lane]]))
-        genome = [fasta for fasta in all_ref_genome_paths if "Homo_sapiens" in fasta]
-
-        # This job creates a ncm.config file used as an internal input to NGSCheckmate
-        # do not change ncm_file name as the tool cannot identity any other name
-        if len(genome) > 0:
-            ncm_job = Job(input_files=[genome[0]],output_files = ["ncm.conf"],
-                command="""echo -e "SAMTOOLS=samtools\nBCFTOOLS=bcftools\nREF={genome}" > {ncm_file}""".format(
-                    genome = genome[0], ncm_file="ncm.conf"))
-            ncm_job.name = "run_checkmate_ncf"
-            ncm_job.samples = self.samples
-            jobs.append(ncm_job)
-
-            # analysis is run for all the project ids separately. Since it only workd with human, doesn't loop over species.
-            # and directly check whether the sample is from a human. No need to worry about the genome version since it
-            # only takes the fastq but it checks with the defined reference genome in the ini or event file
-
-            for lane in self.lanes:
-                output_dir = "sample_mixup_detection/NGSCheckMate/Homo_sapiens/by_lane/"
-
-                job_mkdir = bash.mkdir(os.path.join(output_dir, lane))
-                samples = 0
-                # create a list with output files. Output file names cannot be changed.
-                output_files = [os.path.join(output_dir, lane) + "/" + sub for sub in output_file_names]
-
-                filelist_list = []
-                input_files = []
-                lane_jobs = []
-
-                filelist_path = os.path.join(output_dir, lane, "fastq_files_list_lane_" + lane +".txt")
-                filelist_list.append(filelist_path)
-                job_rm = bash.rm(filelist_path, force=True)
-                job_touch = bash.touch(filelist_path)
-                #filelist = None
-                for readset in self.readsets[lane]:
-                    samples += 1
-
-                    #filelist = os.path.join(output_dir, lane, "fastq_files_list_lane_" + lane +".txt")
-
-                    if (readset.fastq2):
-                        filelist_job = Job(input_files=[readset.fastq1, readset.fastq2],
-                                           output_files= [filelist_path],
-                                           command="""echo -e "{read1}\t{read2}\t{sample}" >> {file}""".format(
-                        read1 = readset.fastq1,
-                        read2 = readset.fastq2,
-                        sample = readset.name,
-                        file = filelist_path
-                    ))
-                        input_files.append(readset.fastq1)
-                        input_files.append(readset.fastq2)
-                    else:
-                        filelist_job = Job(input_files=[readset.fastq1], output_files= [filelist_path],
-                                           command="""echo -e "{read1}\t{sample}" >> {file}""".format(
-                            read1=readset.fastq1,
-                            sample=readset.name,
-                            file=filelist_path))
-                        input_files.append(readset.fastq1)
-                    filelist_job.samples = [readset.sample]
-                    lane_jobs.append(filelist_job)
-                    job_filelist = concat_jobs(lane_jobs)
-
-                if(samples > 1):
-                    input_files.append("ncm.conf")
-                    NGS_checkmate_job = ngscheckmate.fastq(input_files, output_files, os.path.join(output_dir,lane), filelist_path)
-                    job = concat_jobs([job_mkdir, job_rm, job_touch, job_filelist, NGS_checkmate_job])
-                    job.name = "sample_mixup.ngscheckmate_by_lane_" + lane
-                    jobs.append(job)
-                else:
-                    log.info(
-                        "lane " + lane + " has only one sample... skipping NGSCheckmate analysis for this lane....")
-
-
-        return self.throttle_jobs(jobs)
-
-    def checkmate_samplemixup_by_run(self):
-        """
-        Check the sample mixup using NGSCheckmate. FASTQ files are used as the inputs for the analysis
-        Only human samples can be processed.
-        """
-        jobs = []
-
-
-        #get all species in all the lanes and readsets and create a list
-
-        #it doesn't check which species you have it always performs the analysis for humans. But there should be at
-        # least one human sample in the whole run to perform the NGScheckmate analysis
-        # as reference genome file is obtained from the event file
-
-        # do not change below values. They are predefined by the tool
-        output_file_names = ["output_all.txt", "output_corr_matrix.txt", "output_matched.txt"]
-
-        all_ref_genome_paths = list(
-            set([readset.reference_file for lane in self.lanes for readset in self.readsets[lane]]))
-        genome = [fasta for fasta in all_ref_genome_paths if "Homo_sapiens" in fasta]
-
-        # This job creates a ncm.config file used as an internal input to NGSCheckmate
-        # do not change ncm_file name as the tool cannot identity any other name
-        if len(genome) > 0:
-
-            # analysis is run for all the project ids separately. Since it only workd with human, doesn't loop over species.
-            # and directly check whether the sample is from a human. No need to worry about the genome version since it
-            # only takes the fastq but it checks with the defined reference genome in the ini or event file
-            output_dir = "sample_mixup_detection/NGSCheckMate/Homo_sapiens/by_run/"
-
-            job_mkdir = bash.mkdir(os.path.join(output_dir, self.run_id))
-            samples = 0
-            # create a list with output files. Output file names cannot be changed.
-
-            filelist_list = []
-            input_files = []
-            run_jobs = []
-            output_files = [os.path.join(output_dir, self.run_id) + "/" + sub for sub in output_file_names]
-            filelist_path = os.path.join(output_dir, self.run_id, "fastq_files_list_run_" + self.run_id + ".txt")
-            filelist_list.append(filelist_path)
-            job_rm = bash.rm(filelist_path, force=True)
-            job_touch = bash.touch(filelist_path)
-            for lane in self.lanes:
-
-                #filelist = None
-                for readset in self.readsets[lane]:
-                    samples += 1
-
-                    #filelist = os.path.join(output_dir, lane, "fastq_files_list_lane_" + lane +".txt")
-
-                    if (readset.fastq2):
-                        filelist_job = Job(input_files=[readset.fastq1, readset.fastq2],
-                                           output_files= [filelist_path],
-                                           command="""echo -e "{read1}\t{read2}\t{sample}" >> {file}""".format(
-                        read1 = readset.fastq1,
-                        read2 = readset.fastq2,
-                        sample = readset.name,
-                        file = filelist_path
-                    ))
-                        input_files.append(readset.fastq1)
-                        input_files.append(readset.fastq2)
-                    else:
-                        filelist_job = Job(input_files=[readset.fastq1], output_files= [filelist_path],
-                                           command="""echo -e "{read1}\t{sample}" >> {file}""".format(
-                            read1=readset.fastq1,
-                            sample=readset.name,
-                            file=filelist_path))
-                        input_files.append(readset.fastq1)
-                    filelist_job.samples = [readset.sample]
-                    run_jobs.append(filelist_job)
-                    job_filelist = concat_jobs(run_jobs)
-
-            if(samples > 1):
-                input_files.append("ncm.conf")
-                NGS_checkmate_job = ngscheckmate.fastq(input_files, output_files, os.path.join(output_dir,self.run_id), filelist_path)
-
-                job = concat_jobs([job_mkdir, job_rm, job_touch, job_filelist, NGS_checkmate_job])
-                job.name = "sample_mixup.ngscheckmate_by_run_" + self.run_id
-                jobs.append(job)
-            else:
-                log.info(
-                        "Run " + self.run_id+ " has only one sample... skipping NGSCheckmate analysis for this run....")
-
-
-        return self.throttle_jobs(jobs)
-
-    def check_sample_mixup(self):
-        """
-        Sample mixup analysis is performed to identify run processing data files from the same individual.
-        This step can be used to identify doubles or compare samples in the same project id.
-        Additionally, it can be used to compare current run processing data with an existing dataset.
-        This enable us to find and compare samples from same individuals from two different runs.
-        (ie. RNA and WGS data from two different projects)
-
-        Currently it uses two commonly used tools (ie. NGSCheckmate and BAMixchecker) to identify sample mixups.
-
-        NGSCheckmate only supports for human samples and FASTQ files (unaligned reads) are used (the tool supports BAM and VCF files.
-        But the GenPipes only utilizes FASTQ files) as the input files.
-        It supports various types of NGS data files including (but not limited to) whole genome sequencing (WGS),
-        whole exome sequencing (WES), RNA-seq, single cell RNA-seq (scRNA) ChIP-seq, and targeted sequencing of various depths.
-        NGScheckmate can identify sample mixup even from mixed data types (e.g. WES and RNA-seq, or RNA-seq and ChIP-seq).
-        The analysis is performed for each project and all the lanes in a particular project
-        Any type of mixed supported data can be used with in a project. NGSCheckMate uses depth-dependent
-        correlation models of allele fractions of known single-nucleotide polymorphisms (SNPs) to identify samples from
-        the same individual.
-        For more information: https://github.com/parklab/NGSCheckMate
-        The output files can be dound in sample_mixup_detection/NGSCheckMate/Homo_sapiens/PROJECT_ID
-
-        BAMixchecker basically uses BAM files but BAM files need to be processed in-order to use as inputs to the tool.
-        Depending on the sequencing type either 2 or no additional sub step will be executed automatically. Currently
-        we have tested RNA-seq and DNA-seq data by ourselves. If the data are from RNA-seq
-        below 2 steps will be done to pre-process data
-
-        split_N_trim
-        sambamba_merge_splitNtrim_files
-
-        Pre-processed files will be then use as inputs to the BAMixchekcer. The output files can be found in
-        sample_mixup_detection/BAMixChecker/projects/PROJECT_ID/SPECIES/BAMixChecker
-
-        """
-
-        jobs = []
-        jobs.extend(self.checkmate_samplemixup_by_lane())
-        jobs.extend(self.checkmate_samplemixup_by_run())
-        jobs.extend(self.split_N_trim())
-        jobs.extend(self.sambamba_merge_splitNtrim_files())
-        jobs.extend(self.bamixchecker_samplemixup_by_lane())
-        jobs.extend(self.bamixchecker_samplemixup_by_run())
-        return jobs
-
-    def split_N_trim(self):
-        """
-        SplitNtrim. A [GATK](https://software.broadinstitute.org/gatk/) tool called SplitNCigarReads
-        developed specially for RNAseq, which splits reads into exon segments (getting rid of Ns but
-        maintaining grouping information) and hard-clip any sequences overhanging into the intronic regions.
-
-        This analysis is only run for RNA-Seq data.
-        """
-
-        jobs = []
-
-        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', param_type='posint')
-        if nb_jobs > 50:
-            log.warning(
-                "Number of haplotype jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
-
-        for lane in self.lanes:
-            lane_jobs = []
-            for readset in [readset for readset in self.readsets[lane] if readset.bam]:
-                #remove .fa from the fasta file path and add .dict to create the dictionary file path
-                sequence_dictionary = (re.sub(r"\.[^.]+$", "", readset.reference_file) + ".dict")
-
-                if not (os.path.exists(sequence_dictionary)):
-                    sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath', required=False)
-                if (os.path.exists(sequence_dictionary) ):
-                    bam = readset.bam + ".dup.bam"
-                    if readset.is_rna:
-                        # splitN trim only need to do for RNA
-                        alignment_dir = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS",
-                                                     readset.name)
-                        split_dir = os.path.join(alignment_dir, "splitNtrim")
-                        split_file_prefix = os.path.join(split_dir, readset.name + ".")
-
-                        if nb_jobs == 1:
-                            job = concat_jobs([
-                                Job(command="mkdir -p " + alignment_dir),
-                                gatk.split_n_cigar_reads(bam,
-                                                         split_file_prefix + "sorted.dup.split.bam",
-                                                         fasta=readset.reference_file),
-                            ], name="gatk_split_N_trim." + readset.name)
-                            job.samples = [readset.sample]
-                            lane_jobs.append(job)
-
-
-                        else:
-
-                            unique_sequences_per_job, unique_sequences_per_job_others = split_by_size(
-                                parse_sequence_dictionary_file(sequence_dictionary),
-                                nb_jobs - 1)
-                            #  log.info(readset.name)
-                            # Create one separate job for each of the first sequences
-                            for idx, sequences in enumerate(unique_sequences_per_job):
-                                # log.info(readset.name + "." + str(idx))
-                                job = concat_jobs([
-                                    # Create output directory since it is not done by default by GATK tools
-                                    Job(command="mkdir -p " + split_dir),
-                                    gatk.split_n_cigar_reads(bam,
-                                                             split_file_prefix + "sorted.dup.split." + str(
-                                                                 idx) + ".bam",
-                                                             intervals=sequences, fasta=readset.reference_file)
-                                ], name="gatk_split_N_trim." + readset.name + "." + str(idx))
-                                job.samples = [readset.sample]
-                                lane_jobs.append(job)
-
-                            job = concat_jobs([
-                                Job(command="mkdir -p " + alignment_dir),
-                                gatk.split_n_cigar_reads(bam,
-                                                         split_file_prefix + "sorted.dup.split.others.bam",
-                                                         exclude_intervals=unique_sequences_per_job_others,
-                                                         fasta=readset.reference_file)
-                            ], name="gatk_split_N_trim." + readset.name + ".others")
-                            job.samples = [readset.sample]
-                            job.removable_files = [split_file_prefix + "sorted.dup.split.others.bam"]
-                            lane_jobs.append(job)
-                else:
-                    log.info("Please specify the Dictionary file path in an ini file. Skipping... ")
-            jobs.extend(lane_jobs)
-        return self.throttle_jobs(jobs)
-
-    def sambamba_merge_splitNtrim_files(self):
-        """
-        BAM readset files are merged into one file per sample. Merge is done using [Sambamba] (http://lomereiter.github.io/sambamba/docs/sambamba-merge.html).
-        """
-
-        jobs = []
-
-        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', param_type='posint')
-        if nb_jobs > 50:
-            log.warning("Number of haplotype jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
-        #if "blah" not in somestring:
-         #   continue
-
-        for lane in self.lanes:
-            lane_jobs =[]
-            for readset in [readset for readset in self.readsets[lane] if readset.bam]:
-                sequence_dictionary = (re.sub(r"\.[^.]+$", "", readset.reference_file) + ".dict")
-
-                if not (os.path.exists(sequence_dictionary)):
-                    sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath', required=False)
-                if (os.path.exists(sequence_dictionary)):
-                    if readset.is_rna:
-
-                        alignment_directory = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name)
-                        split_file_prefix = os.path.join(alignment_directory, "splitNtrim", readset.name + ".")
-                        output = os.path.join(alignment_directory, readset.name + ".sorted.dup.split.bam")
-
-                        if nb_jobs > 1:
-                            unique_sequences_per_job,unique_sequences_per_job_others = split_by_size(parse_sequence_dictionary_file(sequence_dictionary), nb_jobs - 1)
-
-                            inputs = []
-                            for idx,sequences in enumerate(unique_sequences_per_job):
-                                inputs.append(os.path.join(split_file_prefix + "sorted.dup.split." + str(idx) + ".bam"))
-                            inputs.append(os.path.join(split_file_prefix + "sorted.dup.split.others.bam"))
-
-                            job = sambamba.merge(inputs, output)
-                            job.name = "sambamba_merge_splitNtrim_files." + readset.name
-                            job.samples = [readset.sample]
-                            job.removable_files = [output]
-                            lane_jobs.append(job)
-                else:
-                    log.info("Please specify the Dictionary file path in an ini file. Skipping... ")
-            jobs.extend(lane_jobs)
-        return self.throttle_jobs(jobs)
-
-    def bamixchecker_samplemixup_by_lane(self):
-        """
-        Check the sample mixup using BAMixchecker. BAM files are used for the analysis
-        """
-        jobs = []
-
-        species_list = list(set([readset.species for lane in self.lanes for readset in self.readsets[lane]]))
-
-        for species in species_list:
-            species_jobs = []
-            reference = None
-
-            species_name = species.replace(" ", "_")
-            species_name = species_name.replace(":", "_")
-            species_name = re.sub('[^A-Za-z0-9_]+', '', species_name)
-            for lane in self.lanes:
-                samples = 0
-                input_files = []
-                output_dir = os.path.join("sample_mixup_detection/BAMixChecker",  species_name,  "by_lanes",lane)
-                job_mkdir = bash.mkdir(output_dir)
-                filelist = os.path.join(output_dir, "bam_files_list_" + species_name + "_" + lane + ".txt")
-                job_rm = bash.rm(filelist, force=True)
-                job_touch = bash.touch(filelist)
-                lane_jobs = []
-
-                for readset in [readset for readset in self.readsets[lane] if readset.bam]:
-                    #and "Homo sapiens" in species
-
-                    samples += 1
-                    if readset.is_rna:
-                        file_prefix = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name, readset.name + ".sorted.dup.split.")
-                        bam = file_prefix + "bam"
-                    else:
-                        file_prefix = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name, readset.name + ".sorted.dup.")
-                        bam = readset.bam + ".dup.bam"
-
-                    filelist_job = Job(
-                        [bam],
-                        [filelist],
-                        command="""echo -e "{bam}" >> {file}""".format(
-                            bam=os.path.abspath(os.path.join(self.output_dir, bam)),
-                            file=filelist
-                        )
-                    )
-                    input_files.append(bam)
-                    filelist_job.samples = [readset.sample]
-                    lane_jobs.append(filelist_job)
-                    job_filelist = concat_jobs(lane_jobs)
-
-                    reference = readset.reference_file
-
-                if samples > 1:
-                    options = config.param('run_bamixchecker', 'options')
-                    NonHumanSNPlist = config.param('run_bamixchecker', 'NonHumanSNPlist', required=False)
-
-                    output_files = []
-                    output_files.append(os.path.join(output_dir, "BAMixChecker", "Total_result.txt"))
-                    output_files.append(os.path.join(output_dir, "BAMixChecker", "Matched_samples.txt"))
-
-                    if "Homo_sapiens" in reference:
-
-                        if "GRCh38" in reference or "hg38" in reference:
-                            options = options + " -v hg38"
-                            bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference, options)
-                        elif "GRCh37" in reference or "hg19" in reference:
-                            options = options + " -v hg19"
-                            bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference, options)
-
-                    elif "Mus_musculus" in reference:
-                        if NonHumanSNPlist:
-                            mouse_snp = NonHumanSNPlist
-                            options = options + " --nhSNP " + mouse_snp
-                            bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference, options)
-
-                    else:
-                        if NonHumanSNPlist:
-                            options = options + " --nhSNP " + NonHumanSNPlist
-                            bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference, options)
-
-                    if "Homo_sapiens" in reference or NonHumanSNPlist:
-                        bammixchecker_job.samples = self.samples
-                        job = concat_jobs(
-                            [
-                                job_mkdir,
-                                job_rm,
-                                job_touch,
-                                job_filelist,
-                                bammixchecker_job
-                            ]
-                        )
-                        job.name = "sample_mixup.bamixchecker_by_lanes" + "_" + species_name + "_" + lane
-                        jobs.append(job)
-
-                else:
-                    log.info(species_name +" of lane "+ lane + " has only one sample... skipping BAMixchekcer analysis for this lane....")
-
-        return self.throttle_jobs(jobs)
-
-    def bamixchecker_samplemixup_by_run(self):
-        """
-                Check the sample mixup using BAMixchecker. BAM files are used for the analysis
-        """
-        jobs = []
-
-        species_list = list(set([readset.species for lane in self.lanes for readset in self.readsets[lane]]))
-        #project_list = list(set([readset.project_id for lane in self.lanes for readset in self.readsets[lane]]))
-
-        for species in species_list:
-            species_jobs = []
-            reference = None
-
-            species_name = species.replace(" ", "_")
-            species_name = species_name.replace(":", "_")
-            species_name = re.sub('[^A-Za-z0-9_]+', '', species_name)
-            samples = 0
-            input_files = []
-            output_dir = os.path.join("sample_mixup_detection/BAMixChecker", species_name, "by_run", self.run_id)
-            job_mkdir = bash.mkdir(output_dir)
-            filelist = os.path.join(output_dir, "bam_files_list_" + species_name + "_" + self.run_id + ".txt")
-            job_rm = bash.rm(filelist, force=True)
-            job_touch = bash.touch(filelist)
-            lane_jobs = []
-            for lane in self.lanes:
-
-
-                for readset in [readset for readset in self.readsets[lane] if readset.bam]:
-
-
-                    #and "Homo sapiens" in species
-
-                    samples += 1
-                    if readset.is_rna:
-                        file_prefix = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name,
-                                                   readset.name + ".sorted.dup.split.")
-                        bam = file_prefix + "bam"
-                    else:
-                        file_prefix = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name,
-                                                   readset.name + ".sorted.dup.")
-                        bam = readset.bam + ".dup.bam"
-
-                    #bam = file_prefix + "recal.bam"
-
-                    filelist_job = Job(input_files=[bam],
-                                           output_files=[filelist],
-                                           command="""echo -e "{bam}" >> {file}""".format(
-                                               bam=os.path.abspath(os.path.join(self.output_dir, bam)),
-                                               file=filelist
-                                           ))
-                    input_files.append(bam)
-                    filelist_job.samples = [readset.sample]
-                    lane_jobs.append(filelist_job)
-                    job_filelist = concat_jobs(lane_jobs)
-
-                    reference = readset.reference_file
-
-            if samples > 1:
-                options = config.param('run_bamixchecker', 'options')
-                NonHumanSNPlist = config.param('run_bamixchecker', 'NonHumanSNPlist', required=False)
-
-                output_files = []
-                output_files.append(os.path.join(output_dir, "BAMixChecker", "Total_result.txt"))
-                output_files.append(os.path.join(output_dir, "BAMixChecker", "Matched_samples.txt"))
-
-                if "Homo_sapiens" in reference:
-
-                    if "GRCh38" in reference or "hg38" in reference:
-                        options = options + " -v hg38"
-                        bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference, options)
-                    elif "GRCh37" in reference or "hg19" in reference:
-
-                        options = options + " -v hg19"
-                        bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference,
-                                                                 options)
-                        # TO DO modify below code once prepare the mouse snp list
-                elif "Mus_musculus" in reference:
-                    if NonHumanSNPlist:
-                        mouse_snp = NonHumanSNPlist
-                        options = options + " --nhSNP " + mouse_snp
-                        bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist,
-                                                                 reference, options)
-                else:
-                    if NonHumanSNPlist:
-                        options = options + " --nhSNP " + NonHumanSNPlist
-                        bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference,
-                                                             options)
-
-                if "Homo_sapiens" in reference or NonHumanSNPlist:
-                    bammixchecker_job.samples = self.samples
-                    job = concat_jobs([job_mkdir, job_rm, job_touch, job_filelist, bammixchecker_job])
-                    job.name = "sample_mixup.bamixchecker_by_run" + "_" + species_name + "_" + self.run_id
-                    jobs.append(job)
-
-            else:
-                log.info(species_name +" of run "+ self.run_id + " has only one sample... skipping BAMixchekcer analysis for this run....")
-
-        return self.throttle_jobs(jobs)
-
     # Not used anymore...
     def sample_tag(self):
         """
@@ -2261,6 +1706,595 @@ class RunProcessing(common.MUGQICPipeline):
             return jobs
         else:
             return self.throttle_jobs(jobs)
+
+    def check_sample_mixup(self):
+        """
+        Sample mixup analysis is performed to identify run processing data files from the same individual.
+        This step can be used to identify doubles or compare samples in the same project id.
+        Additionally, it can be used to compare current run processing data with an existing dataset.
+        This enable us to find and compare samples from same individuals from two different runs.
+        (ie. RNA and WGS data from two different projects)
+
+        Currently it uses two commonly used tools (ie. NGSCheckmate and BAMixchecker) to identify sample mixups.
+
+        NGSCheckmate only supports for human samples and FASTQ files (unaligned reads) are used (the tool supports BAM and VCF files.
+        But the GenPipes only utilizes FASTQ files) as the input files.
+        It supports various types of NGS data files including (but not limited to) whole genome sequencing (WGS),
+        whole exome sequencing (WES), RNA-seq, single cell RNA-seq (scRNA) ChIP-seq, and targeted sequencing of various depths.
+        NGScheckmate can identify sample mixup even from mixed data types (e.g. WES and RNA-seq, or RNA-seq and ChIP-seq).
+        The analysis is performed for each project and all the lanes in a particular project
+        Any type of mixed supported data can be used with in a project. NGSCheckMate uses depth-dependent
+        correlation models of allele fractions of known single-nucleotide polymorphisms (SNPs) to identify samples from
+        the same individual.
+        For more information: https://github.com/parklab/NGSCheckMate
+        The output files can be dound in sample_mixup_detection/NGSCheckMate/Homo_sapiens/PROJECT_ID
+
+        BAMixchecker basically uses BAM files but BAM files need to be processed in-order to use as inputs to the tool.
+        Depending on the sequencing type either 2 or no additional sub step will be executed automatically. Currently
+        we have tested RNA-seq and DNA-seq data by ourselves. If the data are from RNA-seq
+        below 2 steps will be done to pre-process data
+
+        split_N_trim
+        sambamba_merge_splitNtrim_files
+
+        Pre-processed files will be then use as inputs to the BAMixchekcer. The output files can be found in
+        sample_mixup_detection/BAMixChecker/projects/PROJECT_ID/SPECIES/BAMixChecker
+
+        """
+
+        jobs = []
+        jobs.extend(self.checkmate_samplemixup_by_lane())
+        jobs.extend(self.checkmate_samplemixup_by_run())
+        jobs.extend(self.split_N_trim())
+        jobs.extend(self.sambamba_merge_splitNtrim_files())
+        jobs.extend(self.bamixchecker_samplemixup_by_lane())
+        jobs.extend(self.bamixchecker_samplemixup_by_run())
+        return jobs
+
+    def checkmate_samplemixup_by_lane(self):
+        """
+        Check the sample mixup using NGSCheckmate by lane. FASTQ files are used as the inputs for the analysis
+        Only human samples can be processed. If there are at least one human sample in the run, every sample in a lane
+        is assume as human and run NGSCheckmate for all the samples in a lane
+        If there is only one sample in a lane, it will be skipped
+        """
+        jobs = []
+
+        #get all species in all the lanes and readsets and create a list
+
+        #it doesn't check which species you have it always performs the analysis for humans. But there should be at
+        # least one human sample in the whole run to perform the NGScheckmate analysis
+        # as reference genome file is obtained from the event file
+
+        # do not change below values. They are predefined by the tool
+        output_file_names = ["output_all.txt", "output_corr_matrix.txt", "output_matched.txt"]
+
+        all_ref_genome_paths = list(set([readset.reference_file for lane in self.lanes for readset in self.readsets[lane]]))
+        genome = [fasta for fasta in all_ref_genome_paths if "Homo_sapiens" in fasta]
+
+        # This job creates a ncm.config file used as an internal input to NGSCheckmate
+        # do not change ncm_file name as the tool cannot identity any other name
+        if len(genome) > 0:
+            ncm_job = Job(
+                [genome[0]],
+                ["ncm.conf"],
+                command="""echo -e "SAMTOOLS=samtools\nBCFTOOLS=bcftools\nREF={genome}" > {ncm_file}""".format(
+                    genome = genome[0], ncm_file="ncm.conf"
+                )
+            )
+            ncm_job.name = "run_checkmate_ncf"
+            ncm_job.samples = self.samples
+            jobs.append(ncm_job)
+
+            # analysis is run for all the project ids separately. Since it only workd with human, doesn't loop over species.
+            # and directly check whether the sample is from a human. No need to worry about the genome version since it
+            # only takes the fastq but it checks with the defined reference genome in the ini or event file
+
+            for lane in self.lanes:
+                output_dir = "sample_mixup_detection/NGSCheckMate/Homo_sapiens/by_lane/"
+
+                job_mkdir = bash.mkdir(os.path.join(output_dir, lane))
+                samples = 0
+                # create a list with output files. Output file names cannot be changed.
+                output_files = [os.path.join(output_dir, lane) + "/" + sub for sub in output_file_names]
+
+                filelist_list = []
+                input_files = []
+                lane_jobs = []
+
+                filelist_path = os.path.join(output_dir, lane, "fastq_files_list_lane_" + lane +".txt")
+                filelist_list.append(filelist_path)
+                job_rm = bash.rm(filelist_path, force=True)
+                job_touch = bash.touch(filelist_path)
+                #filelist = None
+                for readset in self.readsets[lane]:
+                    samples += 1
+
+                    #filelist = os.path.join(output_dir, lane, "fastq_files_list_lane_" + lane +".txt")
+
+                    if (readset.fastq2):
+                        filelist_job = Job(
+                            [readset.fastq1, readset.fastq2],
+                            [filelist_path],
+                            command="""echo -e "{read1}\t{read2}\t{sample}" >> {file}""".format(
+                                read1 = readset.fastq1,
+                                read2 = readset.fastq2,
+                                sample = readset.name,
+                                file = filelist_path
+                            )
+                        )
+                        input_files.append(readset.fastq1)
+                        input_files.append(readset.fastq2)
+                    else:
+                        filelist_job = Job(
+                            [readset.fastq1],
+                            [filelist_path],
+                            command="""echo -e "{read1}\t{sample}" >> {file}""".format(
+                                read1=readset.fastq1,
+                                sample=readset.name,
+                                file=filelist_path
+                            )
+                        )
+                        input_files.append(readset.fastq1)
+                    filelist_job.samples = [readset.sample]
+                    lane_jobs.append(filelist_job)
+                    job_filelist = concat_jobs(lane_jobs)
+
+                if (samples > 1):
+                    input_files.append("ncm.conf")
+                    NGS_checkmate_job = ngscheckmate.fastq(
+                        input_files,
+                        output_files,
+                        os.path.join(output_dir,lane),
+                        filelist_path
+                    )
+                    job = concat_jobs(
+                        [
+                            job_mkdir, 
+                            job_rm,
+                            job_touch,
+                            job_filelist,
+                            NGS_checkmate_job
+                        ]
+                    )
+                    job.name = "sample_mixup.ngscheckmate_by_lane_" + lane
+                    jobs.append(job)
+                else:
+                    log.info(
+                        "lane " + lane + " has only one sample... skipping NGSCheckmate analysis for this lane...")
+
+        return self.throttle_jobs(jobs)
+
+    def checkmate_samplemixup_by_run(self):
+        """
+        Check the sample mixup using NGSCheckmate. FASTQ files are used as the inputs for the analysis
+        Only human samples can be processed.
+        """
+        jobs = []
+
+
+        #get all species in all the lanes and readsets and create a list
+
+        #it doesn't check which species you have it always performs the analysis for humans. But there should be at
+        # least one human sample in the whole run to perform the NGScheckmate analysis
+        # as reference genome file is obtained from the event file
+
+        # do not change below values. They are predefined by the tool
+        output_file_names = ["output_all.txt", "output_corr_matrix.txt", "output_matched.txt"]
+
+        all_ref_genome_paths = list(set([readset.reference_file for lane in self.lanes for readset in self.readsets[lane]]))
+        genome = [fasta for fasta in all_ref_genome_paths if "Homo_sapiens" in fasta]
+
+        # This job creates a ncm.config file used as an internal input to NGSCheckmate
+        # do not change ncm_file name as the tool cannot identity any other name
+        if len(genome) > 0:
+
+            # analysis is run for all the project ids separately. Since it only workd with human, doesn't loop over species.
+            # and directly check whether the sample is from a human. No need to worry about the genome version since it
+            # only takes the fastq but it checks with the defined reference genome in the ini or event file
+            output_dir = "sample_mixup_detection/NGSCheckMate/Homo_sapiens/by_run/"
+
+            job_mkdir = bash.mkdir(os.path.join(output_dir, self.run_id))
+            samples = 0
+            # create a list with output files. Output file names cannot be changed.
+
+            filelist_list = []
+            input_files = []
+            run_jobs = []
+            output_files = [os.path.join(output_dir, self.run_id) + "/" + sub for sub in output_file_names]
+            filelist_path = os.path.join(output_dir, self.run_id, "fastq_files_list_run_" + self.run_id + ".txt")
+            filelist_list.append(filelist_path)
+            job_rm = bash.rm(filelist_path, force=True)
+            job_touch = bash.touch(filelist_path)
+            for lane in self.lanes:
+
+                #filelist = None
+                for readset in self.readsets[lane]:
+                    samples += 1
+
+                    #filelist = os.path.join(output_dir, lane, "fastq_files_list_lane_" + lane +".txt")
+
+                    if (readset.fastq2):
+                        filelist_job = Job(
+                            [readset.fastq1, readset.fastq2],
+                            [filelist_path],
+                            command="""echo -e "{read1}\t{read2}\t{sample}" >> {file}""".format(
+                                read1 = readset.fastq1,
+                                read2 = readset.fastq2,
+                                sample = readset.name,
+                                file = filelist_path
+                            )
+                        )
+                        input_files.append(readset.fastq1)
+                        input_files.append(readset.fastq2)
+                    else:
+                        filelist_job = Job(
+                            [readset.fastq1],
+                            [filelist_path],
+                            """echo -e "{read1}\t{sample}" >> {file}""".format(
+                                read1=readset.fastq1,
+                                sample=readset.name,
+                                file=filelist_path
+                            )
+                        )
+                        input_files.append(readset.fastq1)
+                    filelist_job.samples = [readset.sample]
+                    run_jobs.append(filelist_job)
+                    job_filelist = concat_jobs(run_jobs)
+
+            if(samples > 1):
+                input_files.append("ncm.conf")
+                NGS_checkmate_job = ngscheckmate.fastq(
+                    input_files,
+                    output_files,
+                    os.path.join(output_dir,self.run_id),
+                    filelist_path
+                )
+
+                job = concat_jobs(
+                    [
+                        job_mkdir,
+                        job_rm,
+                        job_touch,
+                        job_filelist,
+                        NGS_checkmate_job
+                    ]
+                )
+                job.name = "sample_mixup.ngscheckmate_by_run_" + self.run_id
+                jobs.append(job)
+            else:
+                log.info("Run " + self.run_id+ " has only one sample... skipping NGSCheckmate analysis for this run....")
+
+        return self.throttle_jobs(jobs)
+
+    def split_N_trim(self):
+        """
+        SplitNtrim. A [GATK](https://software.broadinstitute.org/gatk/) tool called SplitNCigarReads
+        developed specially for RNAseq, which splits reads into exon segments (getting rid of Ns but
+        maintaining grouping information) and hard-clip any sequences overhanging into the intronic regions.
+
+        This analysis is only run for RNA-Seq data.
+        """
+
+        jobs = []
+
+        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', param_type='posint')
+        if nb_jobs > 50:
+            log.warning("Number of haplotype jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
+
+        for lane in self.lanes:
+            lane_jobs = []
+            for readset in [readset for readset in self.readsets[lane] if readset.bam]:
+                #remove .fa from the fasta file path and add .dict to create the dictionary file path
+                sequence_dictionary = (re.sub(r"\.[^.]+$", "", readset.reference_file) + ".dict")
+
+                if not (os.path.exists(sequence_dictionary)):
+                    sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath', required=False)
+
+                if (os.path.exists(sequence_dictionary) ):
+                    bam = readset.bam + ".dup.bam"
+                    if readset.is_rna:
+                        # splitN trim only need to do for RNA
+                        alignment_dir = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS",
+                                                     readset.name)
+                        split_dir = os.path.join(alignment_dir, "splitNtrim")
+                        split_file_prefix = os.path.join(split_dir, readset.name + ".")
+
+                        if nb_jobs == 1:
+                            job = concat_jobs(
+                                [
+                                    Job(command="mkdir -p " + alignment_dir),
+                                    gatk.split_n_cigar_reads(
+                                        bam,
+                                        split_file_prefix + "sorted.dup.split.bam",
+                                        fasta=readset.reference_file
+                                    )
+                                ],
+                                name="gatk_split_N_trim." + readset.name,
+                                samples=[readset.sample]
+                            )
+                            lane_jobs.append(job)
+
+                        else:
+                            unique_sequences_per_job, unique_sequences_per_job_others = split_by_size(parse_sequence_dictionary_file(sequence_dictionary), nb_jobs - 1)
+                            #  log.info(readset.name)
+                            # Create one separate job for each of the first sequences
+                            for idx, sequences in enumerate(unique_sequences_per_job):
+                                # log.info(readset.name + "." + str(idx))
+                                job = concat_jobs(
+                                    [
+                                        # Create output directory since it is not done by default by GATK tools
+                                        Job(command="mkdir -p " + split_dir),
+                                        gatk.split_n_cigar_reads(
+                                            bam,
+                                            split_file_prefix + "sorted.dup.split." + str(idx) + ".bam",
+                                            intervals=sequences,
+                                            fasta=readset.reference_file
+                                        )
+                                    ],
+                                    name="gatk_split_N_trim." + readset.name + "." + str(idx),
+                                    samples=[readset.sample]
+                                )
+                                lane_jobs.append(job)
+
+                            job = concat_jobs(
+                                [
+                                    Job(command="mkdir -p " + alignment_dir),
+                                    gatk.split_n_cigar_reads(
+                                        bam,
+                                        split_file_prefix + "sorted.dup.split.others.bam",
+                                        exclude_intervals=unique_sequences_per_job_others,
+                                        fasta=readset.reference_file
+                                    )
+                                ],
+                                name="gatk_split_N_trim." + readset.name + ".others",
+                                samples=[readset.sample],
+                                removable_files=[split_file_prefix + "sorted.dup.split.others.bam"]
+                            )
+                            lane_jobs.append(job)
+                else:
+                    log.info("Please specify the Dictionary file path in an ini file. Skipping... ")
+            jobs.extend(lane_jobs)
+        return self.throttle_jobs(jobs)
+
+    def sambamba_merge_splitNtrim_files(self):
+        """
+        BAM readset files are merged into one file per sample. Merge is done using [Sambamba] (http://lomereiter.github.io/sambamba/docs/sambamba-merge.html).
+        """
+
+        jobs = []
+
+        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', param_type='posint')
+        if nb_jobs > 50:
+            log.warning("Number of haplotype jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
+
+        for lane in self.lanes:
+            lane_jobs =[]
+            for readset in [readset for readset in self.readsets[lane] if readset.bam]:
+                sequence_dictionary = (re.sub(r"\.[^.]+$", "", readset.reference_file) + ".dict")
+
+                if not (os.path.exists(sequence_dictionary)):
+                    sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath', required=False)
+
+                if (os.path.exists(sequence_dictionary)):
+                    if readset.is_rna:
+
+                        alignment_directory = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name)
+                        split_file_prefix = os.path.join(alignment_directory, "splitNtrim", readset.name + ".")
+                        output = os.path.join(alignment_directory, readset.name + ".sorted.dup.split.bam")
+
+                        if nb_jobs > 1:
+                            unique_sequences_per_job,unique_sequences_per_job_others = split_by_size(parse_sequence_dictionary_file(sequence_dictionary), nb_jobs - 1)
+
+                            inputs = []
+                            for idx,sequences in enumerate(unique_sequences_per_job):
+                                inputs.append(os.path.join(split_file_prefix + "sorted.dup.split." + str(idx) + ".bam"))
+                            inputs.append(os.path.join(split_file_prefix + "sorted.dup.split.others.bam"))
+
+                            job = sambamba.merge(inputs, output)
+                            job.name = "sambamba_merge_splitNtrim_files." + readset.name
+                            job.samples = [readset.sample]
+                            job.removable_files = [output]
+                            lane_jobs.append(job)
+                else:
+                    log.info("Please specify the Dictionary file path in an ini file. Skipping... ")
+            jobs.extend(lane_jobs)
+        return self.throttle_jobs(jobs)
+
+    def bamixchecker_samplemixup_by_lane(self):
+        """
+        Check the sample mixup using BAMixchecker. BAM files are used for the analysis
+        """
+        jobs = []
+
+        species_list = list(set([readset.species for lane in self.lanes for readset in self.readsets[lane]]))
+
+        for species in species_list:
+            species_jobs = []
+            reference = None
+
+            species_name = species.replace(" ", "_")
+            species_name = species_name.replace(":", "_")
+            species_name = re.sub('[^A-Za-z0-9_]+', '', species_name)
+            for lane in self.lanes:
+                samples = 0
+                input_files = []
+                output_dir = os.path.join("sample_mixup_detection/BAMixChecker",  species_name,  "by_lanes",lane)
+                job_mkdir = bash.mkdir(output_dir)
+                filelist = os.path.join(output_dir, "bam_files_list_" + species_name + "_" + lane + ".txt")
+                job_rm = bash.rm(filelist, force=True)
+                job_touch = bash.touch(filelist)
+                lane_jobs = []
+
+                for readset in [readset for readset in self.readsets[lane] if readset.bam]:
+                    #and "Homo sapiens" in species
+
+                    samples += 1
+                    if readset.is_rna:
+                        file_prefix = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name, readset.name + ".sorted.dup.split.")
+                        bam = file_prefix + "bam"
+                    else:
+                        file_prefix = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name, readset.name + ".sorted.dup.")
+                        bam = readset.bam + ".dup.bam"
+
+                    filelist_job = Job(
+                        [bam],
+                        [filelist],
+                        command="""echo -e "{bam}" >> {file}""".format(
+                            bam=os.path.abspath(os.path.join(self.output_dir, bam)),
+                            file=filelist
+                        )
+                    )
+                    input_files.append(bam)
+                    filelist_job.samples = [readset.sample]
+                    lane_jobs.append(filelist_job)
+                    job_filelist = concat_jobs(lane_jobs)
+
+                    reference = readset.reference_file
+
+                if samples > 1:
+                    options = config.param('run_bamixchecker', 'options')
+                    NonHumanSNPlist = config.param('run_bamixchecker', 'NonHumanSNPlist', required=False)
+
+                    output_files = []
+                    output_files.append(os.path.join(output_dir, "BAMixChecker", "Total_result.txt"))
+                    output_files.append(os.path.join(output_dir, "BAMixChecker", "Matched_samples.txt"))
+
+                    if "Homo_sapiens" in reference:
+                        if "GRCh38" in reference or "hg38" in reference:
+                            options = options + " -v hg38"
+                        elif "GRCh37" in reference or "hg19" in reference:
+                            options = options + " -v hg19"
+
+                    elif "Mus_musculus" in reference:
+                        if NonHumanSNPlist:
+                            mouse_snp = NonHumanSNPlist
+                            options = options + " --nhSNP " + mouse_snp
+
+                    else:
+                        if NonHumanSNPlist:
+                            options = options + " --nhSNP " + NonHumanSNPlist
+
+                    bammixchecker_job = bamixchecker.run_bam(
+                        input_files,
+                        output_files,
+                        output_dir,
+                        filelist,
+                        reference,
+                        options
+                    )
+
+                    if "Homo_sapiens" in reference or NonHumanSNPlist:
+                        bammixchecker_job.samples = self.samples
+                        job = concat_jobs(
+                            [
+                                job_mkdir,
+                                job_rm,
+                                job_touch,
+                                job_filelist,
+                                bammixchecker_job
+                            ]
+                        )
+                        job.name = "sample_mixup.bamixchecker_by_lanes" + "_" + species_name + "_" + lane
+                        jobs.append(job)
+
+                else:
+                    log.info(species_name +" of lane "+ lane + " has only one sample... skipping BAMixchekcer analysis for this lane....")
+
+        return self.throttle_jobs(jobs)
+
+    def bamixchecker_samplemixup_by_run(self):
+        """
+                Check the sample mixup using BAMixchecker. BAM files are used for the analysis
+        """
+        jobs = []
+
+        species_list = list(set([readset.species for lane in self.lanes for readset in self.readsets[lane]]))
+
+        for species in species_list:
+            species_jobs = []
+            reference = None
+
+            species_name = species.replace(" ", "_")
+            species_name = species_name.replace(":", "_")
+            species_name = re.sub('[^A-Za-z0-9_]+', '', species_name)
+            samples = 0
+            input_files = []
+            output_dir = os.path.join("sample_mixup_detection/BAMixChecker", species_name, "by_run", self.run_id)
+            job_mkdir = bash.mkdir(output_dir)
+            filelist = os.path.join(output_dir, "bam_files_list_" + species_name + "_" + self.run_id + ".txt")
+            job_rm = bash.rm(filelist, force=True)
+            job_touch = bash.touch(filelist)
+            lane_jobs = []
+            for lane in self.lanes:
+                for readset in [readset for readset in self.readsets[lane] if readset.bam]:
+                    #and "Homo sapiens" in species
+
+                    samples += 1
+                    if readset.is_rna:
+                        file_prefix = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name, readset.name + ".sorted.dup.split.")
+                        bam = file_prefix + "bam"
+                    else:
+                        file_prefix = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name, readset.name + ".sorted.dup.")
+                        bam = readset.bam + ".dup.bam"
+
+                    #bam = file_prefix + "recal.bam"
+
+                    filelist_job = Job(
+                        [bam],
+                        [filelist],
+                        command="""echo -e "{bam}" >> {file}""".format(
+                            bam=os.path.abspath(os.path.join(self.output_dir, bam)),
+                            file=filelist
+                        )
+                    )
+                    input_files.append(bam)
+                    filelist_job.samples = [readset.sample]
+                    lane_jobs.append(filelist_job)
+                    job_filelist = concat_jobs(lane_jobs)
+
+                    reference = readset.reference_file
+
+            if samples > 1:
+                options = config.param('run_bamixchecker', 'options')
+                NonHumanSNPlist = config.param('run_bamixchecker', 'NonHumanSNPlist', required=False)
+
+                output_files = []
+                output_files.append(os.path.join(output_dir, "BAMixChecker", "Total_result.txt"))
+                output_files.append(os.path.join(output_dir, "BAMixChecker", "Matched_samples.txt"))
+
+                if "Homo_sapiens" in reference:
+                    if "GRCh38" in reference or "hg38" in reference:
+                        options = options + " -v hg38"
+                        bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference, options)
+
+                    elif "GRCh37" in reference or "hg19" in reference:
+                        options = options + " -v hg19"
+                        bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference,
+                                                                 options)
+                # TO DO modify below code once prepare the mouse snp list
+                elif "Mus_musculus" in reference:
+                    if NonHumanSNPlist:
+                        mouse_snp = NonHumanSNPlist
+                        options = options + " --nhSNP " + mouse_snp
+                        bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist,
+                                                                 reference, options)
+                else:
+                    if NonHumanSNPlist:
+                        options = options + " --nhSNP " + NonHumanSNPlist
+                        bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference,
+                                                             options)
+
+                if "Homo_sapiens" in reference or NonHumanSNPlist:
+                    bammixchecker_job.samples = self.samples
+                    job = concat_jobs([job_mkdir, job_rm, job_touch, job_filelist, bammixchecker_job])
+                    job.name = "sample_mixup.bamixchecker_by_run" + "_" + species_name + "_" + self.run_id
+                    jobs.append(job)
+
+            else:
+                log.info(species_name +" of run "+ self.run_id + " has only one sample... skipping BAMixchekcer analysis for this run....")
+
+        return self.throttle_jobs(jobs)
 
     def metrics(self):
         """
