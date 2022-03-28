@@ -57,7 +57,7 @@ import utils
 from bfx import ngscheckmate
 from bfx import bamixchecker
 from bfx import gatk
-from bfx.sequence_dictionary import split_by_size
+from bfx.sequence_dictionary import split_by_size, parse_sequence_dictionary_file
 from bfx import sambamba
 
 from pipelines import common
@@ -1985,8 +1985,7 @@ class RunProcessing(common.MUGQICPipeline):
         for lane in self.lanes:
             lane_jobs = []
             for readset in [readset for readset in self.readsets[lane] if readset.bam]:
-                #remove .fa from the fasta file path and add .dict to create the dictionary file path
-                sequence_dictionary = (re.sub(r"\.[^.]+$", "", readset.reference_file) + ".dict")
+                sequence_dictionary = readset.dictionary_file
 
                 if not (os.path.exists(sequence_dictionary)):
                     sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath', required=False)

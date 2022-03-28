@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (C) 2014, 2015 GenAP, McGill University and Genome Quebec Innovation Centre
+# Copyright (C) 2014, 2022 GenAP, McGill University and Genome Quebec Innovation Centre
 #
 # This file is part of MUGQIC Pipelines.
 #
@@ -24,23 +24,37 @@ import os
 from core.config import *
 from core.job import *
 
-def run_bam(inputfiles, outputfiles, out_dir, inputlist, reference, options):
+def run_bam(
+    inputfiles,
+    outputfiles,
+    out_dir,
+    inputlist,
+    reference,
+    options,
+    ini_section='run_bamixchecker'
+    ):
 
     return Job(
         inputfiles,
         outputfiles,
         [
-            ['run_bamixchecker', 'module_python'],
-            ['run_bamixchecker', 'module_java'],
-            ['run_bamixchecker', 'module_bedtools'],
-            ['run_bamixchecker', 'module_R'],
-            ['run_bamixchecker', 'module_pandoc'],
-            ['run_bamixchecker', 'module_gatk'],
-            ['run_bamixchecker', 'module_bamixchecker']
+            [ini_section, 'module_python'],
+            [ini_section, 'module_java'],
+            [ini_section, 'module_bedtools'],
+            [ini_section, 'module_R'],
+            [ini_section, 'module_pandoc'],
+            [ini_section, 'module_gatk'],
+            [ini_section, 'module_bamixchecker']
         ],
-        command="""python $BAMixChecker_PATH/BAMixChecker.py -l {inputlist} -r {reference} -o {out_dir} {options}""".
-            format(inputlist=inputlist,
-                   out_dir=out_dir,
-                   options=options,
-                   reference=reference)
+        command="""\
+python $BAMixChecker_PATH/BAMixChecker.py \\
+  -l {inputlist} \\
+  -r {reference} \\
+  -o {out_dir} \\
+  {options}""".format(
+            inputlist=inputlist,
+            out_dir=out_dir,
+            options=options,
+            reference=reference
+        )
     )

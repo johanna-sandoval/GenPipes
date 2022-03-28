@@ -191,6 +191,14 @@ class BwaRunProcessingAligner(RunProcessingAligner):
             folder_name + ".fa"
         )
 
+    def get_dictionary_file(self):
+        folder_name = os.path.basename(self.genome_folder)
+        return os.path.join(
+            self.genome_folder,
+            "genome",
+            folder_name + ".dict"
+        )
+
     def get_annotation_files(self):
         folder_name = os.path.basename(self.genome_folder)
         ini_file = os.path.join(self.genome_folder + os.sep + folder_name + ".ini")
@@ -523,6 +531,14 @@ class StarRunProcessingAligner(RNARunProcessingAligner):
             folder_name + ".fa"
         )
 
+    def get_dictionary_file(self):
+        folder_name = os.path.basename(self.genome_folder)
+        return os.path.join(
+            self.genome_folder,
+            "genome",
+            folder_name + ".dict"
+        )
+
     def get_alignment_job(self, readset):
         output = readset.bam + ".bam"
 
@@ -594,6 +610,14 @@ class CellrangerRunProcessingAligner(RNARunProcessingAligner):
 
     def get_reference_file(self):
         return os.path.join(self.get_reference_index(), "fasta", "genome.fa")
+
+    def get_dictionary_file(self):
+        folder_name = os.path.basename(self.genome_folder)
+        return os.path.join(
+            self.genome_folder,
+            "genome",
+            folder_name + ".dict"
+        )
 
     def get_alignment_job(self, readset):
         cell_count_job = cellranger.count(
@@ -768,6 +792,14 @@ class AtacRunProcessingAligner(RNARunProcessingAligner):
 
     def get_reference_file(self):
         return os.path.join(self.get_reference_index(), "fasta", "genome.fa")
+
+    def get_dictionary_file(self):
+        folder_name = os.path.basename(self.genome_folder)
+        return os.path.join(
+            self.genome_folder,
+            "genome",
+            folder_name + ".dict"
+        )
 
     def get_alignment_job(self, readset):
         outdir = os.path.join(
