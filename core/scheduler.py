@@ -256,8 +256,7 @@ cd $OUTPUT_DIR
             for step in pipeline.step_range:
                 for job in step.jobs:
                     for sample in job.samples:
-                        if not isinstance(sample, str):
-                            json_files.append(os.path.join(pipeline.output_dir, "json", sample.json_file))
+                        json_files.append(os.path.join(pipeline.output_dir, "json", sample.json_file))
             json_files = list(set(json_files))
             for j_file in json_files:
                 self.genpipes_file.write("""
@@ -269,15 +268,14 @@ cd $OUTPUT_DIR
             copy_commands = []
             test_copy_commands = []
             for i, sample in enumerate(pipeline.sample_list):
-                if not isinstance(sample, str):
-                    unique_uuid = str(uuid4())
-                    input_file = pipeline.sample_paths[i]
-                    output_file = os.path.join(pipeline.portal_output_dir, '$USER.' + sample.name + '.' + unique_uuid + '.json')
-                    #test_output_file = os.path.join("/lb/project/mugqic/analyste_dev/portal_test_dir/", '$USER.' + sample.name + '.' + unique_uuid + '.json')
-                    copy_commands.append("cp \"{input_file}\" \"{output_file}\"".format(
-                        input_file=input_file, output_file=output_file))
-                    #test_copy_commands.append("cp \"{input_file}\" \"{output_file}\"".format(
-                        #input_file=input_file, output_file=test_output_file))
+                unique_uuid = str(uuid4())
+                input_file = pipeline.sample_paths[i]
+                output_file = os.path.join(pipeline.portal_output_dir, '$USER.' + sample.name + '.' + unique_uuid + '.json')
+                #test_output_file = os.path.join("/lb/project/mugqic/analyste_dev/portal_test_dir/", '$USER.' + sample.name + '.' + unique_uuid + '.json')
+                copy_commands.append("cp \"{input_file}\" \"{output_file}\"".format(
+                    input_file=input_file, output_file=output_file))
+                #test_copy_commands.append("cp \"{input_file}\" \"{output_file}\"".format(
+                    #input_file=input_file, output_file=test_output_file))
             self.genpipes_file.write(textwrap.dedent("""
                 #------------------------------------------------------------------------------
                 # Print a copy of sample JSONs for the genpipes dashboard
@@ -299,7 +297,7 @@ mkdir -p $JOB_OUTPUT_DIR/$STEP
         if not pipeline.json:
             return ""
 
-        json_file_list = ",".join([os.path.join(pipeline.output_dir, "json", sample.json_file) for sample in job.samples if not isinstance(sample, str)])
+        json_file_list = ",".join([os.path.join(pipeline.output_dir, "json", sample.json_file) for sample in job.samples])
         return """\
 module load {module_python}
 {job2json_script} \\

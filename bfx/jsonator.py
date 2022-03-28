@@ -67,15 +67,7 @@ def create(pipeline, sample):
             'platform' : pipeline.args.type,
             'instrument': pipeline.instrument,
             "flowcell": pipeline.flowcell_id,
-            "project_id": list(set([readset.project_id for readset in sample.readsets if not isinstance(sample, str)]))[0],
-        }
-    elif pipeline.__class__.__name__ == "RunProcessing":
-        general_info = {
-            'run_id' : pipeline.run_id,
-            'platform' : pipeline.args.type,
-            'instrument': pipeline.instrument,
-            "flowcell": pipeline.flowcell_id,
-            "project_id": list(set([readset.project_id for readset in sample.readsets if not isinstance(sample, str)]))[0],
+            "project_id": list(set([readset.project_id for readset in sample.readsets]))[0],
         }
     else:
         general_info = {

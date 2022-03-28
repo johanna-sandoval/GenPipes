@@ -1779,11 +1779,11 @@ class RunProcessing(common.MUGQICPipeline):
                 [genome[0]],
                 ["ncm.conf"],
                 command="""echo -e "SAMTOOLS=samtools\nBCFTOOLS=bcftools\nREF={genome}" > {ncm_file}""".format(
-                    genome = genome[0], ncm_file="ncm.conf"
+                    genome = genome[0],
+                    ncm_file="ncm.conf"
                 )
             )
             ncm_job.name = "run_checkmate_ncf"
-            ncm_job.samples = self.samples
             jobs.append(ncm_job)
 
             # analysis is run for all the project ids separately. Since it only workd with human, doesn't loop over species.
@@ -1817,10 +1817,10 @@ class RunProcessing(common.MUGQICPipeline):
                             [readset.fastq1, readset.fastq2],
                             [filelist_path],
                             command="""echo -e "{read1}\t{read2}\t{sample}" >> {file}""".format(
-                                read1 = readset.fastq1,
-                                read2 = readset.fastq2,
-                                sample = readset.name,
-                                file = filelist_path
+                                read1=readset.fastq1,
+                                read2=readset.fastq2,
+                                sample=readset.name,
+                                file=filelist_path
                             )
                         )
                         input_files.append(readset.fastq1)
@@ -1838,7 +1838,7 @@ class RunProcessing(common.MUGQICPipeline):
                         input_files.append(readset.fastq1)
                     filelist_job.samples = [readset.sample]
                     lane_jobs.append(filelist_job)
-                    job_filelist = concat_jobs(lane_jobs)
+                job_filelist = concat_jobs(lane_jobs)
 
                 if (samples > 1):
                     input_files.append("ncm.conf")
@@ -1860,8 +1860,7 @@ class RunProcessing(common.MUGQICPipeline):
                     job.name = "sample_mixup.ngscheckmate_by_lane_" + lane
                     jobs.append(job)
                 else:
-                    log.info(
-                        "lane " + lane + " has only one sample... skipping NGSCheckmate analysis for this lane...")
+                    log.info("lane " + lane + " has only one sample... skipping NGSCheckmate analysis for this lane...")
 
         return self.throttle_jobs(jobs)
 
@@ -2098,6 +2097,7 @@ class RunProcessing(common.MUGQICPipeline):
                 else:
                     log.info("Please specify the Dictionary file path in an ini file. Skipping... ")
             jobs.extend(lane_jobs)
+
         return self.throttle_jobs(jobs)
 
     def bamixchecker_samplemixup_by_lane(self):
@@ -2184,7 +2184,7 @@ class RunProcessing(common.MUGQICPipeline):
                     )
 
                     if "Homo_sapiens" in reference or NonHumanSNPlist:
-                        bammixchecker_job.samples = self.samples
+                        bammixchecker_job.samples = self.samples[lane]
                         job = concat_jobs(
                             [
                                 job_mkdir,
@@ -2285,7 +2285,7 @@ class RunProcessing(common.MUGQICPipeline):
                                                              options)
 
                 if "Homo_sapiens" in reference or NonHumanSNPlist:
-                    bammixchecker_job.samples = self.samples
+                    bammixchecker_job.samples = self.samples[lane]
                     job = concat_jobs([job_mkdir, job_rm, job_touch, job_filelist, bammixchecker_job])
                     job.name = "sample_mixup.bamixchecker_by_run" + "_" + species_name + "_" + self.run_id
                     jobs.append(job)
@@ -3370,7 +3370,7 @@ class RunProcessing(common.MUGQICPipeline):
             else:
                 for readset in self.readsets[lane]:
                     readset_name = readset.name
-                    step_report_files = list(set([report_file for job in step.jobs for sample in job.samples for sreadset in sample.readsets for report_file in job.report_files if job.report_files and not isinstance(sample, str) and sreadset.lane == lane and sreadset.name == readset.name]))
+                    step_report_files = list(set([report_file for job in step.jobs for sample in job.samples for sreadset in sample.readsets for report_file in job.report_files if job.report_files and sreadset.lane == lane and sreadset.name == readset.name]))
                     self.report_hash[lane]["multiqc_inputs"].extend([os.path.relpath(path, os.path.join(self.output_dir, "report")) for path in step_report_files])
 
         report_dir = os.path.join(self.output_dir, "report")
