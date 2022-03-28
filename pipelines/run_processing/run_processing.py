@@ -1938,7 +1938,7 @@ class RunProcessing(common.MUGQICPipeline):
 
                 if not (os.path.exists(sequence_dictionary)):
                     sequence_dictionary = config.param('DEFAULT', 'genome_dictionary', param_type='filepath', required=False)
-                if (os.path.exists(sequence_dictionary) ):
+                if (os.path.exists(sequence_dictionary)):
                     if readset.is_rna:
 
                         alignment_directory = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name)
@@ -1965,7 +1965,7 @@ class RunProcessing(common.MUGQICPipeline):
 
     def bamixchecker_samplemixup_by_lane(self):
         """
-                Check the sample mixup using BAMixchecker. BAM files are used for the analysis
+        Check the sample mixup using BAMixchecker. BAM files are used for the analysis
         """
         jobs = []
 
@@ -1989,28 +1989,24 @@ class RunProcessing(common.MUGQICPipeline):
                 lane_jobs = []
 
                 for readset in [readset for readset in self.readsets[lane] if readset.bam]:
-
-
                     #and "Homo sapiens" in species
 
                     samples += 1
                     if readset.is_rna:
-                        file_prefix = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name,
-                                                   readset.name + ".sorted.dup.split.")
+                        file_prefix = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name, readset.name + ".sorted.dup.split.")
                         bam = file_prefix + "bam"
                     else:
-                        file_prefix = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name,
-                                                   readset.name + ".sorted.dup.")
+                        file_prefix = os.path.join("sample_mixup_detection/BAMixChecker", "processed_BAMS", readset.name, readset.name + ".sorted.dup.")
                         bam = readset.bam + ".dup.bam"
 
-                    #bam = file_prefix + "recal.bam"
-
-                    filelist_job = Job(input_files=[bam],
-                                           output_files=[filelist],
-                                           command="""echo -e "{bam}" >> {file}""".format(
-                                               bam=os.path.abspath(os.path.join(self.output_dir, bam)),
-                                               file=filelist
-                                           ))
+                    filelist_job = Job(
+                        [bam],
+                        [filelist],
+                        command="""echo -e "{bam}" >> {file}""".format(
+                            bam=os.path.abspath(os.path.join(self.output_dir, bam)),
+                            file=filelist
+                        )
+                    )
                     input_files.append(bam)
                     filelist_job.samples = [readset.sample]
                     lane_jobs.append(filelist_job)
@@ -2032,27 +2028,31 @@ class RunProcessing(common.MUGQICPipeline):
                             options = options + " -v hg38"
                             bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference, options)
                         elif "GRCh37" in reference or "hg19" in reference:
-
                             options = options + " -v hg19"
-                            bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference,
-                                                                     options)
+                            bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference, options)
+
                     elif "Mus_musculus" in reference:
                         if NonHumanSNPlist:
                             mouse_snp = NonHumanSNPlist
                             options = options + " --nhSNP " + mouse_snp
-                            bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist,
-                                                                     reference,
-                                                                     options)
+                            bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference, options)
 
                     else:
                         if NonHumanSNPlist:
                             options = options + " --nhSNP " + NonHumanSNPlist
-                            bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference,
-                                                                 options)
+                            bammixchecker_job = bamixchecker.run_bam(input_files, output_files, output_dir, filelist, reference, options)
 
                     if "Homo_sapiens" in reference or NonHumanSNPlist:
                         bammixchecker_job.samples = self.samples
-                        job = concat_jobs([job_mkdir, job_rm, job_touch, job_filelist, bammixchecker_job])
+                        job = concat_jobs(
+                            [
+                                job_mkdir,
+                                job_rm,
+                                job_touch,
+                                job_filelist,
+                                bammixchecker_job
+                            ]
+                        )
                         job.name = "sample_mixup.bamixchecker_by_lanes" + "_" + species_name + "_" + lane
                         jobs.append(job)
 
@@ -2060,7 +2060,6 @@ class RunProcessing(common.MUGQICPipeline):
                     log.info(species_name +" of lane "+ lane + " has only one sample... skipping BAMixchekcer analysis for this lane....")
 
         return self.throttle_jobs(jobs)
-
 
     def bamixchecker_samplemixup_by_run(self):
         """
@@ -3153,7 +3152,8 @@ class RunProcessing(common.MUGQICPipeline):
             for idx, readset_index in enumerate(readset.indexes):
                 # Barcode sequence should only match with the barcode cycles defined in the mask
                 # so we adjust the length of the index sequences accordingly for the "Sample_Barcode" field
-                if "DUALINDEX" in set([readset.index_type for readset in self.readsets[lane]]):
+                if self.index2cycles[lane]:
+#"DUALINDEX" in set([readset.index_type for readset in self.readsets[lane]]):
                     sample_barcode = readset_index['INDEX1'][0:index_lengths[0]] + readset_index['INDEX2'][0:index_lengths[1]]
                 else:
                     sample_barcode = readset_index['INDEX1'][0:index_lengths[0]]
@@ -3252,10 +3252,14 @@ class RunProcessing(common.MUGQICPipeline):
             for idx, readset_index in enumerate(readset.indexes):
                 # Barcode sequence should only match with the barcode cycles defined in the mask
                 # so we adjust thw lenght of the index sequences accordingly for the "Sample_Barcode" field
-                if "DUALINDEX" in set([readset.index_type for readset in self.readsets[lane]]):
+                if self.index2cycles[lane]:
+#"DUALINDEX" in set([readset.index_type for readset in self.readsets[lane]]):
                     sample_barcode = readset_index['INDEX2'][0:index_lengths[0]] + readset_index['INDEX1'][0:index_lengths[1]]
                 else:
                     sample_barcode = readset_index['INDEX1'][0:index_lengths[0]]
+                    log.error(readset_index['INDEX1'])
+                    log.error(index_lengths)
+                    log.error(sample_barcode)
                 if self.last_index < len(sample_barcode):
                     sample_barcode = sample_barcode[0:self.last_index]
                 if self.first_index > 1:
