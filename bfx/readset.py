@@ -363,18 +363,17 @@ class IlluminaRawReadset(IlluminaReadset):
 
 def parse_illumina_raw_readset_files(
     output_dir,
-    run_dir,
+    run,
     run_type,
     readset_file,
     lane,
-    genome_root,
     nb_cycles,
     index1cycles,
     index2cycles,
-    seqtype
+    seqtype,
+    platform
     ):
 
-    platform = "Illumina"
     readsets = []
     samples = []
     skipped_db = []
@@ -382,7 +381,6 @@ def parse_illumina_raw_readset_files(
 
     # Parsing Clarity event file
     log.info("Parsing Clarity event file " + readset_file + " for readset in lane " + lane + "...")
-
     readset_csv = csv.DictReader(open(readset_file, 'r'), delimiter='\t', quotechar='"')
 
     for line in readset_csv:
@@ -413,13 +411,16 @@ def parse_illumina_raw_readset_files(
         samples.append(sample)
 
         # Create readset and add it to sample
-        readset = IlluminaRawReadset(line['SampleName']+"_"+line['LibraryLUID'], run_type)
+        if platform == 'illumina':
+            readset = IlluminaRawReadset(line['SampleName']+"_"+line['LibraryLUID'], run_type)
+        elif 'mgi' in platform:
+            readset = MGIRawReadset(line['SampleName']+"_"+line['LibraryLUID'], run_type)
         readset._quality_offset = 33
         readset._description = line['Index'].split(' ')[0]
         readset._index_name = line['Index']
         readset._library = line['LibraryLUID']
         readset._sample_tag = line['Sample Tag']
-        readset._gender = line['Gender']
+        readset._gender = line['Gender'] if line['Gender'] else 'N/A'
 
         for protocol_line in protocol_csv:
             if protocol_line['Clarity Step Name'] == line['LibraryProcess']:
@@ -469,12 +470,10 @@ def parse_illumina_raw_readset_files(
         readset._genomic_database = line['Reference']
         readset._species = line['Species']
 
-        readset._run = Xml.parse(os.path.join(run_dir, "RunInfo.xml")).getroot().find('Run').get('Number')
+        readset._run = run
         readset._lane = current_lane
         readset._sample_number = str(len(readsets) + 1)
-
-        readset._flow_cell = Xml.parse(os.path.join(run_dir, "RunInfo.xml")).getroot().find('Run').find('Flowcell').text
-                            #Xml.parse(os.path.join(run_dir, "RunParameters.xml")).getroot().find('RfidsInfo').find('FlowCellSerialBarcode').text
+        readset._flow_cell = line['ContainerName']
         readset._control = "N"
         readset._recipe = None
         readset._operator = None
@@ -504,6 +503,9 @@ def parse_illumina_raw_readset_files(
 
         readset._indexes = get_index(readset, index1cycles, index2cycles, seqtype) if index1cycles else None
 
+        # Searching for a matching reference for the specified species
+        genome_root = config.param('DEFAULT', 'genome_root', param_type="dirpath")
+
         m = re.search("(?P<build>\w+):(?P<assembly>[\w\.]+)", readset.genomic_database)
         genome_build = None
         if m:
@@ -532,7 +534,7 @@ def parse_illumina_raw_readset_files(
             aligner_reference_index = readset.aligner.get_reference_index()
             annotation_files = readset.aligner.get_annotation_files()
             reference_file = readset.aligner.get_reference_file()
-            dictinary_file = readset.aligner.get_dictionary_file()
+            dictionary_file = readset.aligner.get_dictionary_file()
             if reference_file and os.path.isfile(reference_file):
                 if aligner_reference_index and (os.path.isfile(aligner_reference_index) or os.path.isdir(aligner_reference_index)):
                     readset._aligner_reference_index = aligner_reference_index
@@ -549,8 +551,7 @@ def parse_illumina_raw_readset_files(
                     )
 
                 else:
-                    log.warning("Unable to access the aligner reference file: '" + aligner_reference_index +
-                                "' for aligner: '" + readset.aligner.__class__.__name__ + "'")
+                    log.warning("Unable to access the aligner reference file: '" + aligner_reference_index + "' for aligner: '" + readset.aligner.__class__.__name__ + "'")
             else:
                 log.warning("Unable to access the reference file: '" + reference_file + "'")
 

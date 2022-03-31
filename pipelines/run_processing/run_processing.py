@@ -2766,11 +2766,12 @@ class RunProcessing(common.MUGQICPipeline):
         """
         return sum(index_read.nb_cycles for index_read in [read for read in self.read_infos if read.is_index])
 
-    def get_sequencer_minimum_read_length(self):
+    def get_sequencer_minimum_read_length(self, lane):
         """
         Returns the minimum number of cycles of a real read (not indexed).
         """
-        return min(read.nb_cycles for read in [read for read in self.read_infos if not read.is_index])
+        return min([self.read1cycles[lane], self.read2cycles[lane]])
+#        return min(read.nb_cycles for read in [read for read in self.read_infos if not read.is_index])
 
     # Obsolete...
     def has_single_index(self, lane):
@@ -4212,40 +4213,25 @@ class RunProcessing(common.MUGQICPipeline):
         """
         Parse the sample sheet and return a list of readsets.
         """
-        if self.args.type == 'illumina':
-            seqtype = self.get_seqtype_to_use(self.run_dir)
-            return parse_illumina_raw_readset_files(
-                self.output_dir,
-                self.run_dir,
-                "PAIRED_END" if self.is_paired_end[lane] else "SINGLE_END",
-                self.readset_file,
-                lane,
-                config.param('DEFAULT', 'genome_root', param_type="dirpath"),
-                self.get_sequencer_minimum_read_length(),
-                self.index1cycles[lane],
-                self.index2cycles[lane],
-                self.seqtype
-            )
-        else:
-            return parse_mgi_raw_readset_files(
-                self.readset_file,
-                "PAIRED_END" if self.is_paired_end[lane] else "SINGLE_END",
-                self.seqtype,
-                self.run_id,
-                lane,
-                int(self.read1cycles[lane]),
-                int(self.read2cycles[lane]),
-                int(self.index1cycles[lane]),
-                int(self.index2cycles[lane]),
-                self.output_dir
-            )
+        return parse_illumina_raw_readset_files(
+            self.output_dir,
+            self.run_id,
+            "PAIRED_END" if self.is_paired_end[lane] else "SINGLE_END",
+            self.readset_file,
+            lane,
+            self.get_sequencer_minimum_read_length(lane),
+            self.index1cycles[lane],
+            self.index2cycles[lane],
+            self.seqtype if not self.args.type == 'illumina' else self.get_seqtype_to_use(self.run_dir),
+            self.args.type
+        )
 
     def submit_jobs(self):
         super(RunProcessing, self).submit_jobs()
 
     @property
     def steps(self):
-        # [ Illumina, mgig400, mgit7 ]
+        # [ illumina, mgig400, mgit7 ]
         return [
             [
                 self.index,
