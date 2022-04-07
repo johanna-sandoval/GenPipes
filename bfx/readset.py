@@ -287,7 +287,10 @@ class IlluminaRawReadset(IlluminaReadset):
 
     @property
     def reference_file(self):
-        return self._reference_file
+        if not hasattr(self, "_reference_file"):
+            return None
+        else:
+            return self._reference_file
 
     @property
     def dictionary_file(self):
@@ -753,7 +756,10 @@ class MGIRawReadset(MGIReadset):
 
     @property
     def reference_file(self):
-        return self._reference_file
+        if not hasattr(self, "_reference_file"):
+            return None
+        else:
+            return self._reference_file
 
     @property
     def dictionary_file(self):
