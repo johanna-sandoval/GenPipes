@@ -1884,8 +1884,10 @@ class RunProcessing(common.MUGQICPipeline):
         # do not change below values. They are predefined by the tool
         output_file_names = ["output_all.txt", "output_corr_matrix.txt", "output_matched.txt"]
 
-        all_ref_genome_paths = list(set([readset.reference_file for lane in self.lanes for readset in self.readsets[lane]]))
-        genome = [fasta for fasta in all_ref_genome_paths if "Homo_sapiens" in fasta]
+        all_ref_genome_paths = list(set([readset.reference_file for lane in self.lanes for readset in self.readsets[lane] if readset.reference_file]))
+        genome = [] 
+        if all_ref_genome_paths:
+            genome = [fasta for fasta in all_ref_genome_paths if "Homo_sapiens" in fasta]
 
         # This job creates a ncm.config file used as an internal input to NGSCheckmate
         # do not change ncm_file name as the tool cannot identity any other name
