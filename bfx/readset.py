@@ -764,6 +764,10 @@ class MGIRawReadset(MGIReadset):
         return self._is_rna
 
     @property
+    def is_10x(self):
+        return self._is_10x
+
+    @property
     def is_scrna(self):
         return self._is_scrna
 
@@ -1362,7 +1366,7 @@ def sub_get_index(
     except subprocess.CalledProcessError as exc:
         truseq_1 = exc.output
     try:
-        truseq_2 = subprocess.check_output(main_seq_pattern % (readset.library_type, index_file, "-c " + indext2_primer), shell=True, text=True).strip()
+        truseq_2 = subprocess.check_output(main_seq_pattern.replace("| head -n 1 |", "|") % (readset.library_type, index_file, "-c " + indext2_primer), shell=True, text=True).strip()
     except subprocess.CalledProcessError as exc:
         truseq_2 = exc.output
 
@@ -1395,12 +1399,13 @@ def sub_get_index(
                 actual_index1seq = subprocess.check_output(actual_seq_pattern % (main_seq, index1_primer_seq, 2, "s/\[i7\]/"+index1seq+"/g", str(index1_primeroffset+1)+"-"+str(index1_primeroffset+int(index1cycles))), shell=True, text=True).strip()
 
     if index2cycles:
-        main_seq = subprocess.check_output(main_seq_pattern.replace("| head -n 1 |", "|") % (readset.library_type, index_file, index2_primer), shell=True, text=True).strip()
+#        main_seq = subprocess.check_output(main_seq_pattern.replace("| head -n 1 |", "|") % (readset.library_type, index_file, index2_primer), shell=True, text=True).strip()
 
         if len(index2seq) < int(index2cycles):
             index2_primer_seq = index2_primer[:len(index2seq)-int(index2cycles)]
         else:
             index2_primer_seq = index2_primer
+        main_seq = subprocess.check_output(main_seq_pattern.replace("| head -n 1 |", "|") % (readset.library_type, index_file, index2_primer), shell=True, text=True).strip()
         if index2_primer_seq:
             if seqtype in ["hiseqx", "hiseq4000", "iSeq"] or (seqtype in ["dnbseqg400", "dnbseqt7"] and readset.run_type == "PAIRED_END"):
                 actual_index2seq = subprocess.check_output(actual_seq_pattern.replace("| cut -c", "| rev | cut -c") % (main_seq, index2_primer_seq, 1, "s/\[i5c\]/$(echo "+index2seq+" | tr 'ATGC' 'TACG' )/g", str(index2_primeroffset+1)+"-"+str(index2_primeroffset+int(index2cycles))), shell=True, text=True).strip()

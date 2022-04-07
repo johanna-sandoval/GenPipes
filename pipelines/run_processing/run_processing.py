@@ -772,6 +772,7 @@ class RunProcessing(common.MUGQICPipeline):
                 lane_jobs.append(
                     concat_jobs([
                         bash.mkdir(basecalls_dir),
+                        bash.rm(os.path.join(basecalls_dir, "L00" + lane)),
                         bash.ln(
                             os.path.join(self.run_dir, "Data", "Intensities", "BaseCalls", "L00" + lane),
                             os.path.join(basecalls_dir, "L00" + lane)
@@ -1026,7 +1027,7 @@ class RunProcessing(common.MUGQICPipeline):
                      err_msg += self.run_dir + ")"
                      _raise(SanitycheckError(err_msg))
 
-                elif int(self._index1cycles[lane]) + int(self._index2cycles[lane]) == 0:
+                elif int(self.index1cycles[lane]) + int(self.index2cycles[lane]) == 0:
                     log.info("No barcode cycles in the lane... Skipping fastq step for lane " + lane + "...")
 
                 else:
@@ -1062,7 +1063,7 @@ class RunProcessing(common.MUGQICPipeline):
 
                         # If needed, set a renaming job here
                         rename_job = None
-                        if (len(self.readsets[lane]) == 1) or (int(self._index1cycles[lane]) + int(self._index2cycles[lane]) == 0):
+                        if (len(self.readsets[lane]) == 1) or (int(self.index1cycles[lane]) + int(self.index2cycles[lane]) == 0):
                             readset = self.readsets[lane][0]
                             if readset.run_type == "PAIRED_END":
                                 rename_job = concat_jobs(
@@ -2795,7 +2796,7 @@ class RunProcessing(common.MUGQICPipeline):
         min_sample_index_length = min(len(index['INDEX1']) for index in all_indexes)
         run_index_lengths.append(min(min_sample_index_length, int(self.index1cycles[lane])))
 
-        if self.index2cycles[lane]:
+        if int(self.index2cycles[lane]):
             min_sample_index_length = min(len(index['INDEX2']) for index in all_indexes)
             if 'mgi' in self.args.type:
                 run_index_lengths.insert(0, min(min_sample_index_length, int(self.index2cycles[lane])))
@@ -2925,7 +2926,7 @@ class RunProcessing(common.MUGQICPipeline):
 
         for readset in self.readsets[lane]:
             for current_index in readset.indexes:
-                if self.index2cycles[lane]:
+                if int(self.index2cycles[lane]):
                     if 'mgi' in self.args.type:
                         current_barcode = current_index['INDEX2'][0:index_lengths[0]]+current_index['INDEX1'][0:index_lengths[1]]
                     else:
@@ -3013,14 +3014,17 @@ class RunProcessing(common.MUGQICPipeline):
         nb_total_index_base_used = 0
 
         index_cycles = [int(self.index1cycles[lane])]
-        if self.index2cycles[lane]:
+        log.error(index_cycles)
+        if int(self.index2cycles[lane]):
             index_cycles.insert(0, int(self.index2cycles[lane]))
+        log.error(index_cycles)
 
         mask = self.read1cycles[lane] + 'T'
         if self.read2cycles[lane] != '0':
             mask += ' ' + self.read2cycles[lane] + 'T'
 
         for idx_nb_cycles in index_cycles:
+            log.error(idx_nb_cycles)
             if idx_nb_cycles >= index_lengths[index_read_count]:
                 if index_lengths[index_read_count] == 0 or self.last_index <= nb_total_index_base_used:
                     # Don't use any index bases for this read
@@ -3166,7 +3170,7 @@ class RunProcessing(common.MUGQICPipeline):
         self._index2cycles[lane] = config.param('fastq_illumina', 'overindex2') if config.param('fastq_illumina', 'overindex2', required=False, param_type='int') else final_index2
 
         # If the second index exists
-        if self.index2cycles != 0:
+        if self.index2cycles[lane] != 0:
             dualindex_demultiplexing = True
 
         # In case of HaloPlex-like masks, R2 is actually I2 (while R3 is R2),
@@ -3186,7 +3190,7 @@ class RunProcessing(common.MUGQICPipeline):
             for idx, readset_index in enumerate(readset.indexes):
                 # Barcode sequence should only match with the barcode cycles defined in the mask
                 # so we adjust the length of the index sequences accordingly for the "Sample_Barcode" field
-                if self.index2cycles[lane]:
+                if int(self.index2cycles[lane]):
 #"DUALINDEX" in set([readset.index_type for readset in self.readsets[lane]]):
                     sample_barcode = readset_index['INDEX1'][0:index_lengths[0]] + readset_index['INDEX2'][0:index_lengths[1]]
                 else:
@@ -3198,6 +3202,7 @@ class RunProcessing(common.MUGQICPipeline):
 
                 readset_index['BARCODE_SEQUENCE'] = sample_barcode
                 readset.indexes[idx] = readset_index
+                log.error(readset_index['INDEX1'] + ' sdadsda ' + readset_index['INDEX2'])
 
                 csv_dict = {
                     "FCID": readset.flow_cell,
@@ -3286,7 +3291,7 @@ class RunProcessing(common.MUGQICPipeline):
             for idx, readset_index in enumerate(readset.indexes):
                 # Barcode sequence should only match with the barcode cycles defined in the mask
                 # so we adjust thw lenght of the index sequences accordingly for the "Sample_Barcode" field
-                if self.index2cycles[lane]:
+                if int(self.index2cycles[lane]):
 #"DUALINDEX" in set([readset.index_type for readset in self.readsets[lane]]):
                     sample_barcode = readset_index['INDEX2'][0:index_lengths[0]] + readset_index['INDEX1'][0:index_lengths[1]]
                 else:
@@ -4220,8 +4225,8 @@ class RunProcessing(common.MUGQICPipeline):
             self.readset_file,
             lane,
             self.get_sequencer_minimum_read_length(lane),
-            self.index1cycles[lane],
-            self.index2cycles[lane],
+            int(self.index1cycles[lane]),
+            int(self.index2cycles[lane]),
             self.seqtype if not self.args.type == 'illumina' else self.get_seqtype_to_use(self.run_dir),
             self.args.type
         )
