@@ -1634,7 +1634,7 @@ if __name__ == '__main__':
             # PXZ (XZ parallel)
 #            r = tool(name = "PXZ (XZ parallel)",
 #                     exe = "pxz",
-#                     param = "--version",
+#                     get = "--version",
 #                     web = "<http://jnovy.fedorapeople.org/pxz/>",
 #                     versions = PXZ_VERSION,
 #                     version_word = 'pxz',

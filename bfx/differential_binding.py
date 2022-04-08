@@ -32,8 +32,8 @@ def diffbind( input_files, comparison, design, readset, output_dir, alignment_di
     html_output = "".join((output_dir, "_".join(("/diffbind", comparison, method, "dba.html"))))
     R_filename = "".join((output_dir, "_".join(("/diffbind", comparison, method, "dba.R"))))
 
-    th = config.param('differential_binding', 'th')
-    bUsePval = config.param('differential_binding', 'bUsePval')
+    th = global_conf.get('differential_binding', 'th')
+    bUsePval = global_conf.get('differential_binding', 'bUsePval')
 
     return Job(
         input_files,
@@ -71,8 +71,8 @@ def diffbind_R( input_files, comparison, design, readset, output_dir, alignment_
 
     output_file = "".join((output_dir, "_".join(("/diffbind", comparison, method, "dba.txt"))))
 
-    th = config.param('differential_binding', 'th')
-    bUsePval = config.param('differential_binding', 'bUsePval')
+    th = global_conf.get('differential_binding', 'th')
+    bUsePval = global_conf.get('differential_binding', 'bUsePval')
 
     return Job(
         input_files,

@@ -45,11 +45,11 @@ java -Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram} -jar $AMBER_JAR \
   -tumor_bam {tumor_bam} \\
   -loci {loci} \\
   -output_dir {output_dir}""".format(
-        tmp_dir=global_config_parser.param('amber', 'tmp_dir'),
-        java_other_options=global_config_parser.param('amber', 'java_other_options'),
-        ram=global_config_parser.param('amber', 'ram'),
-        threads=global_config_parser.param('amber', 'threads'),
-        loci=global_config_parser.param('amber', 'loci'),
+        tmp_dir=global_conf.get('amber', 'tmp_dir'),
+        java_other_options=global_conf.get('amber', 'java_other_options'),
+        ram=global_conf.get('amber', 'ram'),
+        threads=global_conf.get('amber', 'threads'),
+        loci=global_conf.get('amber', 'loci'),
         reference=normal_name,
         reference_bam=normal,
         tumor=tumor_name,

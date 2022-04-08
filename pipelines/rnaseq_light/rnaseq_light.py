@@ -32,7 +32,7 @@ import subprocess
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))))
 
 # MUGQIC Modules
-from core.config import global_config_parser, _raise, SanitycheckError
+from core.config import global_conf, _raise, SanitycheckError
 from core.job import Job, concat_jobs
 import utils.utils
 
@@ -60,10 +60,10 @@ class RnaSeqLight(rnaseq.RnaSeqRaw):
         """
             Run Kallisto on fastq files for a fast esimate of abundance.
         """
-        transcriptome_file = global_config_parser.param('kallisto', 'transcriptome_idx', param_type="filepath")
-        tx2genes_file = global_config_parser.param('kallisto', 'transcript2genes', param_type="filepath")
-        bootstraps = global_config_parser.param('kallisto', 'bootstraps')
-        other_param = global_config_parser.param('kallisto', 'other_options', required=False)
+        transcriptome_file = global_conf.get('kallisto', 'transcriptome_idx', param_type="filepath")
+        tx2genes_file = global_conf.get('kallisto', 'transcript2genes', param_type="filepath")
+        bootstraps = global_conf.get('kallisto', 'bootstraps')
+        other_param = global_conf.get('kallisto', 'other_options', required=False)
 
         jobs = []
         for readset in self.readsets:
@@ -97,8 +97,8 @@ class RnaSeqLight(rnaseq.RnaSeqRaw):
 
                 job_name = "kallisto." + readset.name
                 output_dir=os.path.join(self.output_dir, "kallisto", readset.sample.name)
-                fragment_length = global_config_parser.param('kallisto', 'fragment_length')
-                fragment_length_sd = global_config_parser.param('kallisto', 'fragment_length_sd')
+                fragment_length = global_conf.get('kallisto', 'fragment_length')
+                fragment_length_sd = global_conf.get('kallisto', 'fragment_length_sd')
                 #warn user to update parameters in ini file?
                 # print("Please make sure to update fragment_length and fragment_length_sd in the ini file!")
                 parameters=" --single -l "+ fragment_length +" -s " + fragment_length_sd
@@ -151,7 +151,7 @@ class RnaSeqLight(rnaseq.RnaSeqRaw):
 cp \\
   {tx2genes_file} \\
   {report_dir}""".format(
-                            tx2genes_file=global_config_parser.param('kallisto', 'transcript2genes', param_type="filepath"),
+                            tx2genes_file=global_conf.get('kallisto', 'transcript2genes', param_type="filepath"),
                             report_dir=report_dir
                         )
                     )
@@ -194,7 +194,7 @@ cp \\
             Job(command="mkdir -p exploratory"),
             gq_seq_utils.exploratory_analysis_rnaseq_light(
                 abundance_file,
-                global_config_parser.param('gq_seq_utils_exploratory_analysis_rnaseq_light', 'genes', param_type='filepath'),
+                global_conf.get('gq_seq_utils_exploratory_analysis_rnaseq_light', 'genes', param_type='filepath'),
                 "exploratory"
             )
         ], name="gq_seq_utils_exploratory_analysis_rnaseq_light", samples=self.samples))
@@ -225,7 +225,7 @@ cp \\
                     design_file = os.path.relpath(self.design_file.name, self.output_dir)
             output_directory = "sleuth" 
             count_matrix = os.path.join(self.output_dir, "kallisto", "All_readsets","all_readsets.abundance_genes.csv")
-            tx2gene = global_config_parser.param('sleuth_differential_expression', 'tx2gene')
+            tx2gene = global_conf.get('sleuth_differential_expression', 'tx2gene')
             
             sleuth_job = differential_expression.sleuth(design_file, count_matrix, tx2gene, output_directory)
             sleuth_job.output_files = [os.path.join(output_directory, contrast.name, "results.wt.gene.csv") for contrast in self.contrasts]

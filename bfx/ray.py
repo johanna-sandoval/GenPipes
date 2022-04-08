@@ -55,10 +55,10 @@ mpiexec {optionmpi} Ray -k {kmer} \\
   {pair} \\
   {single} \\
   -o {output}""".format(
-        optionmpi=global_config_parser.param('ray_assembly', 'openmpi_options', required=False),
+        optionmpi=global_conf.get('ray_assembly', 'openmpi_options', required=False),
         rmdir=pathOut,
         mkdir=pathOut,
-        kmer=global_config_parser.param('ray_assembly', 'kmer'),
+        kmer=global_conf.get('ray_assembly', 'kmer'),
         options=options,
         pair=strPair,
         single=strSingle,

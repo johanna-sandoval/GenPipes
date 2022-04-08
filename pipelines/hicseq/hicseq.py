@@ -32,7 +32,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 # MUGQIC Modules
 from bfx import bash_cmd as bash
-from core.config import global_config_parser, SanitycheckError, _raise
+from core.config import global_conf, SanitycheckError, _raise
 from core.job import Job, concat_jobs, pipe_jobs
 from pipelines import common
 import utils.utils
@@ -137,16 +137,16 @@ class HicSeq(common.Illumina):
 
     @property
     def genome(self):
-        genome_source = global_config_parser.param('DEFAULT', 'source')
+        genome_source = global_conf.get('DEFAULT', 'source')
         if genome_source == "UCSC":
-            genome = global_config_parser.param('DEFAULT', 'assembly')
+            genome = global_conf.get('DEFAULT', 'assembly')
         else:
-            genome = global_config_parser.param('DEFAULT', 'assembly_synonyms')
+            genome = global_conf.get('DEFAULT', 'assembly_synonyms')
         return genome
 
     @property
     def genome_digest(self):
-        genome_digest = os.path.expandvars(global_config_parser.param('hicup_align', "genome_digest_" + self.enzyme))
+        genome_digest = os.path.expandvars(global_conf.get('hicup_align', "genome_digest_" + self.enzyme))
         return genome_digest
 
     def fastq_readName_Edit(self):
@@ -275,8 +275,8 @@ class HicSeq(common.Illumina):
 
         jobs = []
 
-        makeDirTag_hic_other_options=global_config_parser.param('homer_tag_directory', 'other_options', required=False)
-        PEflag = eval(global_config_parser.param('homer_tag_directory', 'illuminaPE'))
+        makeDirTag_hic_other_options=global_conf.get('homer_tag_directory', 'other_options', required=False)
+        PEflag = eval(global_conf.get('homer_tag_directory', 'illuminaPE'))
 
         for sample in self.samples:
             tagDirName = "_".join(("HTD", sample.name, self.enzyme))
@@ -304,11 +304,11 @@ class HicSeq(common.Illumina):
 
         jobs = []
 
-        chrs = global_config_parser.param('interaction_matrices_Chr', 'chromosomes')
-        res_chr = global_config_parser.param('interaction_matrices_Chr', 'resolution_chr').split(",")
+        chrs = global_conf.get('interaction_matrices_Chr', 'chromosomes')
+        res_chr = global_conf.get('interaction_matrices_Chr', 'resolution_chr').split(",")
 
         if chrs == "All":
-            genome_dict = os.path.expandvars(global_config_parser.param('DEFAULT', 'genome_dictionary', param_type='filepath'))
+            genome_dict = os.path.expandvars(global_conf.get('DEFAULT', 'genome_dictionary', param_type='filepath'))
             chrs = genome.chr_names_conv(genome_dict)
         else:
             chrs = chrs.split(",")
@@ -362,13 +362,13 @@ class HicSeq(common.Illumina):
         jobs = []
 
         #Get defined chromosomes, resolution and other paramters from the config (.ini) file
-        chrs = global_config_parser.param('interaction_matrices_Chr', 'chromosomes')
-        res_chr= [x.strip() for x in global_config_parser.param('interaction_matrices_Chr', 'resolution_chr').split(",")]
-        bound_width = global_config_parser.param('reproducibility_scores', 'boundary_width')
-        weights = global_config_parser.param('reproducibility_scores', 'weights')
-        down_sampling = global_config_parser.param('reproducibility_scores', 'down_sampling')
-        smooth = global_config_parser.param('reproducibility_scores', 'h')
-        corr = global_config_parser.param('reproducibility_scores', 'corr')
+        chrs = global_conf.get('interaction_matrices_Chr', 'chromosomes')
+        res_chr= [x.strip() for x in global_conf.get('interaction_matrices_Chr', 'resolution_chr').split(",")]
+        bound_width = global_conf.get('reproducibility_scores', 'boundary_width')
+        weights = global_conf.get('reproducibility_scores', 'weights')
+        down_sampling = global_conf.get('reproducibility_scores', 'down_sampling')
+        smooth = global_conf.get('reproducibility_scores', 'h')
+        corr = global_conf.get('reproducibility_scores', 'corr')
 
 
         #Get the pairwise combinations of each sample (return an object list)
@@ -377,7 +377,7 @@ class HicSeq(common.Illumina):
         #run a loop for each resolution type and for each sample pair
         #compare each chromosome in the selected sample pair
         if chrs == "All":
-            genome_dict = os.path.expandvars(global_config_parser.param('DEFAULT', 'genome_dictionary', param_type='filepath'))
+            genome_dict = os.path.expandvars(global_conf.get('DEFAULT', 'genome_dictionary', param_type='filepath'))
             chrs = genome.chr_names_conv(genome_dict)
         else:
             chrs = [x.strip() for x in chrs.split(",")]
@@ -488,9 +488,9 @@ class HicSeq(common.Illumina):
         jobs = []
 
         # Get defined chromosomes and resolution from the config (.ini) file
-        chrs = global_config_parser.param('interaction_matrices_Chr', 'chromosomes')
-        res_chr= [x.strip() for x in global_config_parser.param('interaction_matrices_Chr', 'resolution_chr').split(",")]
-        genome_fasta = global_config_parser.param('DEFAULT', 'genome_fasta')
+        chrs = global_conf.get('interaction_matrices_Chr', 'chromosomes')
+        res_chr= [x.strip() for x in global_conf.get('interaction_matrices_Chr', 'resolution_chr').split(",")]
+        genome_fasta = global_conf.get('DEFAULT', 'genome_fasta')
         chrom_lengths = ".".join((genome_fasta, "fai"))
         output_dir = self.output_dirs['quality_score_output_directory']
         temp_dir="temp"
@@ -505,7 +505,7 @@ class HicSeq(common.Illumina):
             jobs.append(job_fend)
 
         if chrs == "All":
-            genome_dict = os.path.expandvars(global_config_parser.param('DEFAULT', 'genome_dictionary', param_type='filepath'))
+            genome_dict = os.path.expandvars(global_conf.get('DEFAULT', 'genome_dictionary', param_type='filepath'))
             chrs = genome.chr_names_conv(genome_dict)
         else:
             chrs = [x.strip() for x in chrs.split(",")]
@@ -546,8 +546,8 @@ class HicSeq(common.Illumina):
         #loop through each sample with same enzyme and one or many resolutions user has specified.
         #user can specify the downsampling value too. If needed the full coverage (all reads), use 0 as the downsampling value
 
-        quasr_res = global_config_parser.param('quality_scores', 'resolution_chr')
-        quasr_coverage = global_config_parser.param('quality_scores', 'down_sampling')
+        quasr_res = global_conf.get('quality_scores', 'resolution_chr')
+        quasr_coverage = global_conf.get('quality_scores', 'down_sampling')
 
         quasr_report_files = []
         quasr_prefix = "quasarqc_res"
@@ -593,7 +593,7 @@ class HicSeq(common.Illumina):
 
         jobs = []
 
-        res_genome = global_config_parser.param('interaction_matrices_genome', 'resolution_genome').split(",")
+        res_genome = global_conf.get('interaction_matrices_genome', 'resolution_genome').split(",")
 
         for sample in self.samples:
             tagDirName = "_".join(("HTD", sample.name, self.enzyme))
@@ -628,7 +628,7 @@ class HicSeq(common.Illumina):
 
         jobs = []
 
-        res = global_config_parser.param('identify_compartments', 'resolution_cmpt')
+        res = global_conf.get('identify_compartments', 'resolution_cmpt')
 
         for sample in self.samples:
             tagDirName = "_".join(("HTD", sample.name, self.enzyme))
@@ -653,11 +653,11 @@ class HicSeq(common.Illumina):
 
         jobs = []
 
-        chrs = global_config_parser.param('identify_TADs', 'chromosomes')
-        res_chr = global_config_parser.param('identify_TADs', 'resolution_TADs').split(",")
+        chrs = global_conf.get('identify_TADs', 'chromosomes')
+        res_chr = global_conf.get('identify_TADs', 'resolution_TADs').split(",")
 
         if chrs == "All":
-            genome_dict = os.path.expandvars(global_config_parser.param('DEFAULT', 'genome_dictionary', param_type='filepath'))
+            genome_dict = os.path.expandvars(global_conf.get('DEFAULT', 'genome_dictionary', param_type='filepath'))
             chrs = genome.chr_names_conv(genome_dict)
         else:
             chrs = chrs.split(",")
@@ -702,11 +702,11 @@ class HicSeq(common.Illumina):
 
         jobs = []
 
-        chrs = global_config_parser.param('identify_TADs', 'chromosomes')
-        res = global_config_parser.param('identify_TADs', 'resolution_TADs').split(",")[0]
+        chrs = global_conf.get('identify_TADs', 'chromosomes')
+        res = global_conf.get('identify_TADs', 'resolution_TADs').split(",")[0]
 
         if chrs == "All":
-            genome_dict = os.path.expandvars(global_config_parser.param('DEFAULT', 'genome_dictionary', param_type='filepath'))
+            genome_dict = os.path.expandvars(global_conf.get('DEFAULT', 'genome_dictionary', param_type='filepath'))
             chrs = genome.chr_names_conv(genome_dict)
         else:
             chrs = chrs.split(",")
@@ -740,7 +740,7 @@ class HicSeq(common.Illumina):
 
         jobs = []
 
-        res = global_config_parser.param('identify_peaks', 'resolution_pks')
+        res = global_conf.get('identify_peaks', 'resolution_pks')
 
         for sample in self.samples:
             tagDirName = "_".join(("HTD", sample.name, self.enzyme))
@@ -792,7 +792,7 @@ class HicSeq(common.Illumina):
 
         jobs = []
 
-        yamlFile = os.path.expandvars(global_config_parser.param('multiqc_report', 'MULTIQC_CONFIG_PATH'))
+        yamlFile = os.path.expandvars(global_conf.get('multiqc_report', 'MULTIQC_CONFIG_PATH'))
         input_files = [os.path.join(self.output_dirs['bams_output_directory'], sample.name, sample.name + ".merged.bam") for sample in self.samples]
         job = multiqc.mutliqc_run(yamlFile, input_files)
         job.samples = self.samples
@@ -830,11 +830,11 @@ class HicSeq(common.Illumina):
         ## return 1 baitmap per enzyme/capture array combination
 
         input_rmap = os.path.join(self.output_dirs['chicago_input_files'], self.enzyme + ".sorted.rmap")
-        input_bait = global_config_parser.param('create_baitmap_file', "baitBed")
+        input_bait = global_conf.get('create_baitmap_file', "baitBed")
         sorted_input_bait = re.sub("\.bed", ".sorted.bed", input_bait)
         output_file_name = re.sub("\.bed", "", os.path.basename(input_bait)) + "_" + self.enzyme + ".baitmap"
         output_file = os.path.join(self.output_dirs['chicago_input_files'], output_file_name)
-        annotation = global_config_parser.param('create_baitmap_file', "annotation")
+        annotation = global_conf.get('create_baitmap_file', "annotation")
 
         job = concat_jobs([
             bedops.sort_bed(input_bait, sorted_input_bait),
@@ -852,10 +852,10 @@ class HicSeq(common.Illumina):
         """
 
         rmapfile = os.path.join(self.output_dirs['chicago_input_files'], self.enzyme + ".sorted.rmap")
-        baitmapfile = os.path.join(self.output_dirs['chicago_input_files'], os.path.basename(re.sub("\.bed$", "", global_config_parser.param('create_baitmap_file', "baitBed")) + "_" + self.enzyme + ".baitmap"))
-        other_options = global_config_parser.param('create_design_files', 'other_options', required = False)
+        baitmapfile = os.path.join(self.output_dirs['chicago_input_files'], os.path.basename(re.sub("\.bed$", "", global_conf.get('create_baitmap_file', "baitBed")) + "_" + self.enzyme + ".baitmap"))
+        other_options = global_conf.get('create_design_files', 'other_options', required = False)
         designDir = self.output_dirs['chicago_input_files']
-        outfilePrefix = os.path.join(self.output_dirs['chicago_input_files'], os.path.basename(re.sub("\.bed$", "", global_config_parser.param('create_baitmap_file', "baitBed")) + "_" + self.enzyme))
+        outfilePrefix = os.path.join(self.output_dirs['chicago_input_files'], os.path.basename(re.sub("\.bed$", "", global_conf.get('create_baitmap_file', "baitBed")) + "_" + self.enzyme))
         job = chicago.makeDesignFiles(rmapfile, baitmapfile, outfilePrefix, designDir, other_options)
         job.samples = self.samples
 
@@ -868,8 +868,8 @@ class HicSeq(common.Illumina):
 
         jobs = []
         rmapfile = os.path.join(self.output_dirs['chicago_input_files'], self.enzyme + ".sorted.rmap")
-        baitmapfile = os.path.join(self.output_dirs['chicago_input_files'], os.path.basename(re.sub("\.bed$", "", global_config_parser.param('create_baitmap_file', "baitBed")) + "_" + self.enzyme + ".baitmap"))
-        other_options = global_config_parser.param('create_input_files', 'other_options', required = False)
+        baitmapfile = os.path.join(self.output_dirs['chicago_input_files'], os.path.basename(re.sub("\.bed$", "", global_conf.get('create_baitmap_file', "baitBed")) + "_" + self.enzyme + ".baitmap"))
+        other_options = global_conf.get('create_input_files', 'other_options', required = False)
 
         for sample in self.samples:
             name = os.path.join(self.output_dirs['chicago_input_files'], sample.name)
@@ -890,9 +890,9 @@ class HicSeq(common.Illumina):
         jobs = []
         design_dir = self.output_dirs['chicago_input_files']
         output_dir = self.output_dirs['chicago_output_directory']
-        design_file_prefix = os.path.basename(re.sub("\.bed$", "", global_config_parser.param('create_baitmap_file', "baitBed"))
+        design_file_prefix = os.path.basename(re.sub("\.bed$", "", global_conf.get('create_baitmap_file', "baitBed"))
                                               + "_" + self.enzyme)
-        other_options = global_config_parser.param('runChicago', 'other_options', required=False)
+        other_options = global_conf.get('runChicago', 'other_options', required=False)
 
         for sample in self.samples:
             job = chicago.runChicago(design_dir, sample.name, output_dir, design_file_prefix, other_options)
@@ -911,9 +911,9 @@ class HicSeq(common.Illumina):
         jobs = []
         design_dir = self.output_dirs['chicago_input_files']
         output_dir = self.output_dirs['chicago_output_directory']
-        design_file_prefix = os.path.basename(re.sub("\.bed$", "", global_config_parser.param('create_baitmap_file', "baitBed")) + "_" + self.enzyme)
-        other_options = global_config_parser.param('runChicago_featureOverlap', 'other_options', required = False)
-        features_file = global_config_parser.param('runChicago_featureOverlap', 'features_file', required = True)
+        design_file_prefix = os.path.basename(re.sub("\.bed$", "", global_conf.get('create_baitmap_file', "baitBed")) + "_" + self.enzyme)
+        other_options = global_conf.get('runChicago_featureOverlap', 'other_options', required = False)
+        features_file = global_conf.get('runChicago_featureOverlap', 'features_file', required = True)
 
         if features_file != "None":
             for sample in self.samples:
@@ -933,8 +933,8 @@ class HicSeq(common.Illumina):
         jobs = []
         chicago_output_dir = self.output_dirs['chicago_output_directory']
         intersect_output_dir = self.output_dirs['intersect_ouput_directory']
-        other_options = global_config_parser.param('bait_intersect', 'other_options', required = False)
-        features_file = global_config_parser.param('bait_intersect', 'features_file', required = True)
+        other_options = global_conf.get('bait_intersect', 'other_options', required = False)
+        features_file = global_conf.get('bait_intersect', 'features_file', required = True)
 
         sorted_features_file = os.path.splitext(features_file)[0] + ".sorted.bed"
         output_dir = os.path.join(chicago_output_dir, intersect_output_dir)
@@ -988,8 +988,8 @@ class HicSeq(common.Illumina):
         jobs = []
         chicago_output_dir = self.output_dirs['chicago_output_directory']
         intersect_output_dir = self.output_dirs['intersect_ouput_directory']
-        other_options = global_config_parser.param('capture_intersect', 'other_options', required = False)
-        features_file = global_config_parser.param('capture_intersect', 'features_file', required = True)
+        other_options = global_conf.get('capture_intersect', 'other_options', required = False)
+        features_file = global_conf.get('capture_intersect', 'features_file', required = True)
 
         sorted_features_file = os.path.splitext(features_file)[0] + ".sorted.bed"
         output_dir = os.path.join(chicago_output_dir, intersect_output_dir)

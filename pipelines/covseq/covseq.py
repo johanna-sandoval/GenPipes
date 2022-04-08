@@ -31,7 +31,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 import argparse
 
 # MUGQIC Modules
-from core.config import global_config_parser, _raise, SanitycheckError
+from core.config import global_conf, _raise, SanitycheckError
 from core.job import Job, concat_jobs, pipe_jobs
 import utils.utils
 import subprocess
@@ -57,7 +57,7 @@ from bfx import samtools
 from bfx import snpeff
 
 from bfx import bash_cmd as bash
-from core.config import global_config_parser
+from core.config import global_conf
 
 log = logging.getLogger(__name__)
 
@@ -137,8 +137,8 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                                 "\\tSM:" + readset.sample.name + \
                                 "\\tLB:" + (readset.library if readset.library else readset.sample.name) + \
                                        ("\\tPU:run" + readset.run + "_" + readset.lane if readset.run and readset.lane else "") + \
-                                       ("\\tCN:" + global_config_parser.param('host_reads_removal', 'sequencing_center') if global_config_parser.param('host_reads_removal', 'sequencing_center', required=False) else "") + \
-                                       ("\\tPL:" + global_config_parser.param('host_reads_removal', 'sequencing_technology') if global_config_parser.param('host_reads_removal', 'sequencing_technology', required=False) else "Illumina") + \
+                                       ("\\tCN:" + global_conf.get('host_reads_removal', 'sequencing_center') if global_conf.get('host_reads_removal', 'sequencing_center', required=False) else "") + \
+                                       ("\\tPL:" + global_conf.get('host_reads_removal', 'sequencing_technology') if global_conf.get('host_reads_removal', 'sequencing_technology', required=False) else "Illumina") + \
                                 "'",
                                 ini_section='host_reads_removal'
                                 ),
@@ -150,25 +150,25 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                         sambamba.sort(
                             "/dev/stdin",
                             readset_bam,
-                            tmp_dir=global_config_parser.param('host_reads_removal', 'tmp_dir', required=True),
-                            other_options=global_config_parser.param('host_reads_removal', 'sambamba_sort_other_options', required=False)
+                            tmp_dir=global_conf.get('host_reads_removal', 'tmp_dir', required=True),
+                            other_options=global_conf.get('host_reads_removal', 'sambamba_sort_other_options', required=False)
                             )
                         ]),
                     sambamba.view(
                             readset_bam,
                             readset_bam_host_removed_sorted,
-                            options=global_config_parser.param('host_reads_removal', 'sambamba_view_other_options')
+                            options=global_conf.get('host_reads_removal', 'sambamba_view_other_options')
                             ),
                     sambamba.sort(
                             readset_bam_host_removed_sorted,
                             readset_bam_host_removed_name_sorted,
-                            tmp_dir=global_config_parser.param('host_reads_removal', 'tmp_dir', required=True),
-                            other_options=global_config_parser.param('host_reads_removal', 'sambamba_name_sort_other_options', required=False)
+                            tmp_dir=global_conf.get('host_reads_removal', 'tmp_dir', required=True),
+                            other_options=global_conf.get('host_reads_removal', 'sambamba_name_sort_other_options', required=False)
                             ),
                     sambamba.index(
                         readset_bam_host_removed_sorted,
                         readset_bam_host_removed_sorted_index,
-                        other_options=global_config_parser.param('host_reads_removal', 'sambamba_index_other_options', required=False)
+                        other_options=global_conf.get('host_reads_removal', 'sambamba_index_other_options', required=False)
                         ),
                     samtools.bam2fq(
                         input_bam=readset_bam_host_removed_name_sorted,
@@ -235,9 +235,9 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                         fastq1,
                         fastq2,
                         kraken_out_prefix,
-                        other_options=global_config_parser.param('kraken_analysis', 'kraken2_other_options'),
-                        nthread=global_config_parser.param('kraken_analysis', 'kraken2_threads'),
-                        database=global_config_parser.param('kraken_analysis', 'kraken2_database')
+                        other_options=global_conf.get('kraken_analysis', 'kraken2_other_options'),
+                        nthread=global_conf.get('kraken_analysis', 'kraken2_threads'),
+                        database=global_conf.get('kraken_analysis', 'kraken2_database')
                         ),
                     Job(
                         input_files=unclassified_output + classified_output,
@@ -247,7 +247,7 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                         ],
                         command="""pigz -k -f -p {nthreads} {input_files}""".format(
                             input_files=" ".join(unclassified_output + classified_output),
-                            nthreads=global_config_parser.param('kraken_analysis', 'pigz_threads')
+                            nthreads=global_conf.get('kraken_analysis', 'pigz_threads')
                             )
                         )
                     ],
@@ -382,27 +382,27 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                                 "\\tSM:" + readset.sample.name + \
                                 "\\tLB:" + (readset.library if readset.library else readset.sample.name) + \
                                        ("\\tPU:run" + readset.run + "_" + readset.lane if readset.run and readset.lane else "") + \
-                                       ("\\tCN:" + global_config_parser.param('mapping_bwa_mem_sambamba', 'sequencing_center') if global_config_parser.param('mapping_bwa_mem_sambamba', 'sequencing_center', required=False) else "") + \
-                                       ("\\tPL:" + global_config_parser.param('mapping_bwa_mem_sambamba', 'sequencing_technology') if global_config_parser.param('mapping_bwa_mem_sambamba', 'sequencing_technology', required=False) else "Illumina") + \
+                                       ("\\tCN:" + global_conf.get('mapping_bwa_mem_sambamba', 'sequencing_center') if global_conf.get('mapping_bwa_mem_sambamba', 'sequencing_center', required=False) else "") + \
+                                       ("\\tPL:" + global_conf.get('mapping_bwa_mem_sambamba', 'sequencing_technology') if global_conf.get('mapping_bwa_mem_sambamba', 'sequencing_technology', required=False) else "Illumina") + \
                                 "'",
                                 ini_section='mapping_bwa_mem_sambamba'
                                 ),
                         sambamba.view(
                             "/dev/stdin",
                             None,
-                            options=global_config_parser.param('mapping_bwa_mem_sambamba', 'sambamba_view_other_options')
+                            options=global_conf.get('mapping_bwa_mem_sambamba', 'sambamba_view_other_options')
                             ),
                         sambamba.sort(
                             "/dev/stdin",
                             readset_bam,
-                            tmp_dir=global_config_parser.param('mapping_bwa_mem_sambamba', 'tmp_dir', required=True),
-                            other_options=global_config_parser.param('mapping_bwa_mem_sambamba', 'sambamba_sort_other_options', required=False)
+                            tmp_dir=global_conf.get('mapping_bwa_mem_sambamba', 'tmp_dir', required=True),
+                            other_options=global_conf.get('mapping_bwa_mem_sambamba', 'sambamba_sort_other_options', required=False)
                             )
                         ]),
                     sambamba.index(
                         readset_bam,
                         index_bam,
-                        other_options=global_config_parser.param('mapping_bwa_mem_sambamba', 'sambamba_index_other_options', required=False)
+                        other_options=global_conf.get('mapping_bwa_mem_sambamba', 'sambamba_index_other_options', required=False)
                         )
                     ],
                     name="mapping_bwa_mem_sambamba." + readset.name,
@@ -438,14 +438,14 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                             command="""awk 'substr($0,1,1)=="@" ||\\
  ($9 >= {min_insert_size} && $9 <= {max_insert_size}) ||\\
  ($9 <= -{min_insert_size} && $9 >= -{max_insert_size})'""".format(
-     min_insert_size=global_config_parser.param('sambamba_filtering', 'min_insert_size', required=False),
-     max_insert_size=global_config_parser.param('sambamba_filtering', 'max_insert_size', required=False)
+     min_insert_size=global_conf.get('sambamba_filtering', 'min_insert_size', required=False),
+     max_insert_size=global_conf.get('sambamba_filtering', 'max_insert_size', required=False)
      )
                             ),
                         sambamba.view(
                             input_bam="/dev/stdin",
                             output_bam=output_bam,
-                            options=global_config_parser.param('sambamba_filtering', 'sambamba_filtering_other_options', required=False)
+                            options=global_conf.get('sambamba_filtering', 'sambamba_filtering_other_options', required=False)
                             )
                         ]),
                     ],
@@ -507,7 +507,7 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                     sambamba.sort(
                         output_prefix + ".bam",
                         output_bam,
-                        global_config_parser.param('ivar_trim_primers', 'tmp_dir')
+                        global_conf.get('ivar_trim_primers', 'tmp_dir')
                         )
                     ],
                     name="ivar_trim_primers." + sample.name,
@@ -543,7 +543,7 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                         sambamba.flagstat(
                             input_bam,
                             output,
-                            global_config_parser.param('sambamba_flagstat', 'flagstat_options')
+                            global_conf.get('sambamba_flagstat', 'flagstat_options')
                             )
                         ],
                         name="sambamba_flagstat." + re.sub("\.bam$", "", os.path.basename(input_bam)),
@@ -702,7 +702,7 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                         samtools.mpileup(
                             input_bam,
                             output=None,
-                            other_options=global_config_parser.param('ivar_call_variants', 'mpileup_options'),
+                            other_options=global_conf.get('ivar_call_variants', 'mpileup_options'),
                             region=None,
                             regionFile=None,
                             ini_section='ivar_call_variants'
@@ -785,7 +785,7 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                         bcftools.norm(
                             file,
                             None,
-                            "-f " + global_config_parser.param("DEFAULT", 'genome_fasta', param_type='filepath'),
+                            "-f " + global_conf.get("DEFAULT", 'genome_fasta', param_type='filepath'),
                             ini_section='freebayes_call_variants'
                             ),
                         htslib.bgzip_tabix(
@@ -902,7 +902,7 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                         samtools.mpileup(
                             input_bam,
                             output=None,
-                            other_options=global_config_parser.param('ivar_create_consensus', 'mpileup_options'),
+                            other_options=global_conf.get('ivar_create_consensus', 'mpileup_options'),
                             region=None,
                             regionFile=None,
                             ini_section='ivar_create_consensus'
@@ -947,7 +947,7 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                     bcftools.consensus(
                         input_ambiguous_norm,
                         output_ambiguous_fasta,
-                        "-f " + global_config_parser.param("DEFAULT", 'genome_fasta', param_type='filepath') + " -I "
+                        "-f " + global_conf.get("DEFAULT", 'genome_fasta', param_type='filepath') + " -I "
                         ),
                     pipe_jobs([
                         bcftools.consensus(
@@ -961,7 +961,7 @@ class CoVSeq(dnaseq.DnaSeqRaw):
                             module_entries=[],
                             command="""\\
 sed s/{reference_genome_name}/{sample_name}/ > {output_consensus_fasta}""".format(
-    reference_genome_name=global_config_parser.param("DEFAULT", 'assembly_synonyms'),
+    reference_genome_name=global_conf.get("DEFAULT", 'assembly_synonyms'),
     sample_name=sample.name,
     output_consensus_fasta=output_consensus_fasta
     )
@@ -1033,7 +1033,7 @@ sed s/{reference_genome_name}/{sample_name}/ > {output_consensus_fasta}""".forma
             quast_ivar_tsv = os.path.join(quast_ivar_directory, "report.tsv")
 
             ivar_output_fa = os.path.join(consensus_directory, sample.name + ".consensus.fasta")
-            ivar_output_status_fa = os.path.join(consensus_directory, """{sample_name}.consensus.{technology}.{status}.fasta""".format(sample_name=sample.name, technology=global_config_parser.param('rename_consensus_header', 'sequencing_technology', required=False), status="${IVAR_STATUS}"))
+            ivar_output_status_fa = os.path.join(consensus_directory, """{sample_name}.consensus.{technology}.{status}.fasta""".format(sample_name=sample.name, technology=global_conf.get('rename_consensus_header', 'sequencing_technology', required=False), status="${IVAR_STATUS}"))
 
             variant_directory = os.path.join("variant", sample.name)
             [ivar_vcf] = self.select_input_files([
@@ -1069,7 +1069,7 @@ IVAR_STATUS=`awk -v bam_cov50X=$bam_cov50X -v ivar_frameshift=$ivar_frameshift -
 export IVAR_STATUS""".format(
     quast_ivar_html=quast_ivar_html,
     quast_ivar_tsv=quast_ivar_tsv,
-    genome_file=global_config_parser.param('DEFAULT', 'igv_genome', required=False),
+    genome_file=global_conf.get('DEFAULT', 'igv_genome', required=False),
     ivar_annotated_vcf=ivar_annotated_vcf,
     bedgraph_file=bedgraph_file
     )
@@ -1080,10 +1080,10 @@ export IVAR_STATUS""".format(
                         command="""\\
 awk '/^>/{{print ">{country}/{province}-{sample}/{year} seq_method:{seq_method}|assemb_method:ivar|snv_call_method:ivar"; next}}{{print}}' < {ivar_consensus} > {ivar_output_status_fa} && \\
 ln -sf {ivar_output_status_fa_basename} {ivar_output_fa}""".format(
-    country=global_config_parser.param('rename_consensus_header', 'country', required=False),
-    province=global_config_parser.param('rename_consensus_header', 'province', required=False),
-    year=global_config_parser.param('rename_consensus_header', 'year', required=False),
-    seq_method=global_config_parser.param('rename_consensus_header', 'seq_method', required=False),
+    country=global_conf.get('rename_consensus_header', 'country', required=False),
+    province=global_conf.get('rename_consensus_header', 'province', required=False),
+    year=global_conf.get('rename_consensus_header', 'year', required=False),
+    seq_method=global_conf.get('rename_consensus_header', 'seq_method', required=False),
     sample=sample.name,
     ivar_consensus=ivar_consensus,
     ivar_output_status_fa_basename=os.path.basename(ivar_output_status_fa),
@@ -1116,7 +1116,7 @@ ln -sf {ivar_output_status_fa_basename} {ivar_output_fa}""".format(
             quast_freebayes_tsv = os.path.join(quast_freebayes_directory, "report.tsv")
 
             freebayes_output_fa = os.path.join(consensus_directory, sample.name) + ".freebayes_calling.consensus.renamed.fasta"
-            freebayes_output_status_fa = os.path.join(consensus_directory, """{sample_name}.freebayes_calling.consensus.{technology}.{status}.fasta""".format(sample_name=sample.name, technology=global_config_parser.param('rename_consensus_header', 'sequencing_technology', required=False), status="${FREEBAYES_STATUS}"))
+            freebayes_output_status_fa = os.path.join(consensus_directory, """{sample_name}.freebayes_calling.consensus.{technology}.{status}.fasta""".format(sample_name=sample.name, technology=global_conf.get('rename_consensus_header', 'sequencing_technology', required=False), status="${FREEBAYES_STATUS}"))
 
             variant_directory = os.path.join("variant", sample.name)
             freebayes_vcf = os.path.join(variant_directory, sample.name) + ".freebayes_calling.fixed.norm.vcf.gz"
@@ -1148,7 +1148,7 @@ FREEBAYES_STATUS=`awk -v bam_cov50X=$bam_cov50X -v freebayes_frameshift=$freebay
 export FREEBAYES_STATUS""".format(
     quast_freebayes_html=quast_freebayes_html,
     quast_freebayes_tsv=quast_freebayes_tsv,
-    genome_file=global_config_parser.param('DEFAULT', 'igv_genome', required=False),
+    genome_file=global_conf.get('DEFAULT', 'igv_genome', required=False),
     freebayes_annotated_vcf=freebayes_annotated_vcf,
     bedgraph_file=bedgraph_file
     )
@@ -1159,10 +1159,10 @@ export FREEBAYES_STATUS""".format(
                         command="""\\
 awk '/^>/{{print ">{country}/{province}-{sample}/{year} seq_method:{seq_method}|assemb_method:bcftools|snv_call_method:freebayes"; next}}{{print}}' < {freebayes_consensus} > {freebayes_output_status_fa} && \\
 ln -sf {freebayes_output_status_fa_basename} {freebayes_output_fa}""".format(
-    country=global_config_parser.param('rename_consensus_header', 'country', required=False),
-    province=global_config_parser.param('rename_consensus_header', 'province', required=False),
-    year=global_config_parser.param('rename_consensus_header', 'year', required=False),
-    seq_method=global_config_parser.param('rename_consensus_header', 'seq_method', required=False),
+    country=global_conf.get('rename_consensus_header', 'country', required=False),
+    province=global_conf.get('rename_consensus_header', 'province', required=False),
+    year=global_conf.get('rename_consensus_header', 'year', required=False),
+    seq_method=global_conf.get('rename_consensus_header', 'seq_method', required=False),
     sample=sample.name,
     freebayes_consensus=freebayes_consensus,
     freebayes_output_status_fa_basename=os.path.basename(freebayes_output_status_fa),
@@ -1268,8 +1268,8 @@ quick_align.py -r {ivar_consensus} -g {freebayes_consensus} -o vcf > {output}"""
         modules = []
         # Retrieve all unique module version values in config files
         # assuming that all module key names start with "module_"
-        for section in global_config_parser.sections():
-            for name, value in global_config_parser.items(section):
+        for section in global_conf.sections():
+            for name, value in global_conf.items(section):
                 if re.search("^module_", name) and value not in modules:
                     modules.append(value)
 
@@ -1374,18 +1374,18 @@ sequencing_technology,{sequencing_technology}" > {run_metadata} && \\
 echo "Software Versions
 {modules_all}" > {software_version}""".format(
     output_dir=self.output_dir,
-    run_name=global_config_parser.param('prepare_report', 'run_name', required=True),
+    run_name=global_conf.get('prepare_report', 'run_name', required=True),
     genpipes_version=self.genpipes_version().strip(),
-    cluster_server=global_config_parser.param('prepare_report', 'cluster_server'),
-    assembly_synonyms=global_config_parser.param('prepare_report', 'assembly_synonyms'),
-    sequencing_technology=global_config_parser.param('prepare_report', 'sequencing_technology'),
+    cluster_server=global_conf.get('prepare_report', 'cluster_server'),
+    assembly_synonyms=global_conf.get('prepare_report', 'assembly_synonyms'),
+    sequencing_technology=global_conf.get('prepare_report', 'sequencing_technology'),
     run_metadata=run_metadata,
     modules_all="\n".join(modules),
     software_version=software_version
     )
                     )
                 ],
-                name="prepare_table." + global_config_parser.param('prepare_report', 'run_name', required=True)
+                name="prepare_table." + global_conf.get('prepare_report', 'run_name', required=True)
                 )
             )
 
@@ -1411,8 +1411,8 @@ echo "Software Versions
         modules = []
         # Retrieve all unique module version values in config files
         # assuming that all module key names start with "module_"
-        for section in global_config_parser.sections():
-            for name, value in global_config_parser.items(section):
+        for section in global_conf.sections():
+            for name, value in global_conf.items(section):
                 if re.search("^module_", name) and value not in modules:
                     modules.append(value)
 
@@ -1501,7 +1501,7 @@ fi""".format(
                     command="""\\
 module purge && \\
 module load {R_covseqtools}""".format(
-    R_covseqtools=global_config_parser.param('prepare_report', 'module_R') + " " + global_config_parser.param('prepare_report', 'module_CoVSeQ_tools'),
+    R_covseqtools=global_conf.get('prepare_report', 'module_R') + " " + global_conf.get('prepare_report', 'module_CoVSeQ_tools'),
     output_dir=self.output_dir)
                     ),
                 covseq_tools.generate_report_tables(
@@ -1515,7 +1515,7 @@ module load {R_covseqtools}""".format(
                     caller="ivar"
                     )
                 ],
-                name="prepare_report." + global_config_parser.param('prepare_report', 'run_name', required=True)
+                name="prepare_report." + global_conf.get('prepare_report', 'run_name', required=True)
                 )
             )
 
@@ -1625,7 +1625,7 @@ fi""".format(
                     command="""\\
 module purge && \\
 module load {R_covseqtools}""".format(
-    R_covseqtools=global_config_parser.param('prepare_report', 'module_R') + " " + global_config_parser.param('prepare_report', 'module_CoVSeQ_tools'),
+    R_covseqtools=global_conf.get('prepare_report', 'module_R') + " " + global_conf.get('prepare_report', 'module_CoVSeQ_tools'),
     output_dir=self.output_dir)
                     ),
                 covseq_tools.generate_report_tables(
@@ -1639,7 +1639,7 @@ module load {R_covseqtools}""".format(
                     caller="freebayes"
                     )
                 ],
-                name="prepare_report." + global_config_parser.param('prepare_report', 'run_name', required=True)
+                name="prepare_report." + global_conf.get('prepare_report', 'run_name', required=True)
                 )
             )
 

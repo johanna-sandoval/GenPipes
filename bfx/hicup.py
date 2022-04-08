@@ -41,16 +41,16 @@ def create_hicup_conf(name, fastq1, fastq2, sample_output_dir, genome_digest):
     {fastq1}
     {fastq2}
     """.format(sample_output_dir = sample_output_dir,
-               threads = global_config_parser.param('hicup_align', 'threads'),
-               Quiet = global_config_parser.param('hicup_align', 'Quiet'),
-               Keep = global_config_parser.param('hicup_align', 'Keep'),
-               Bowtie2_path = os.path.expandvars(global_config_parser.param('hicup_align', 'Bowtie2_path')),
-               R_path = os.path.expandvars(global_config_parser.param('hicup_align', 'R_path')),
-               Genome_Index_hicup = os.path.expandvars(global_config_parser.param('hicup_align', 'Genome_Index_hicup')),
+               threads = global_conf.get('hicup_align', 'threads'),
+               Quiet = global_conf.get('hicup_align', 'Quiet'),
+               Keep = global_conf.get('hicup_align', 'Keep'),
+               Bowtie2_path = os.path.expandvars(global_conf.get('hicup_align', 'Bowtie2_path')),
+               R_path = os.path.expandvars(global_conf.get('hicup_align', 'R_path')),
+               Genome_Index_hicup = os.path.expandvars(global_conf.get('hicup_align', 'Genome_Index_hicup')),
                Genome_Digest = genome_digest,
-               Format = global_config_parser.param('hicup_align', 'Format'),
-               Longest = global_config_parser.param('hicup_align', 'Longest'),
-               Shortest = global_config_parser.param('hicup_align', 'Shortest'),
+               Format = global_conf.get('hicup_align', 'Format'),
+               Longest = global_conf.get('hicup_align', 'Longest'),
+               Shortest = global_conf.get('hicup_align', 'Shortest'),
                fastq1 = fastq1 + ".edited.gz",
                fastq2 = fastq2 + ".edited.gz")
 

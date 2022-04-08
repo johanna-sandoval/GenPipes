@@ -28,7 +28,7 @@ from uuid import uuid4
 
 from utils import utils
 
-from .config import global_config_parser
+from .config import global_conf
 
 # Output comment separator line
 separator_line = "#" + "-" * 79
@@ -82,23 +82,23 @@ class Scheduler(object):
         raise NotImplementedError
 
     def gpu_type(self, job_name_prefix):
-        gpu_type = global_config_parser.param(job_name_prefix, 'cluster_gpu_type', required=False)
+        gpu_type = global_conf.get(job_name_prefix, 'cluster_gpu_type', required=False)
         return ''.join(gpu_type.split())
 
     def gpu(self, job_name_prefix):
-        return global_config_parser.param(job_name_prefix, 'cluster_gpu', required=False)
+        return global_conf.get(job_name_prefix, 'cluster_gpu', required=False)
 
     def dependency_arg(self, job_name_prefix):
         # be careful "after" is a subset of the other stings and must be at the end of the list.
         supported = ['afterany', 'afternotok', 'afterok', 'after']
-        dep_str = global_config_parser.param(job_name_prefix, 'cluster_dependency_arg')
+        dep_str = global_conf.get(job_name_prefix, 'cluster_dependency_arg')
         for condition in supported:
             if condition in dep_str:
                 return condition
         raise ValueError('{} not part of cluster_dependency_arg supported value {}'.format(dep_str, supported))
 
     def cpu(self, job_name_prefix):
-        cpu_str = self.config.param(job_name_prefix, 'cluster_cpu', required=True)
+        cpu_str = global_conf.parambal_config_parser.get(job_name_prefix, 'cluster_cpu', required=True)
         try:
             if "ppn" in cpu_str or '-c' in cpu_str:
                 # to be back compatible
@@ -112,11 +112,11 @@ class Scheduler(object):
     def node(self, job_name_prefix):
         # code run on 1 node by default
         node = 1
-        node_str = self.config.param(job_name_prefix, 'cluster_node', required=False)
+        node_str = global_conf.get(job_name_prefix, 'cluster_node', required=False)
 
         cpu_str = None
         if not node_str:
-            cpu_str = self.config.param(job_name_prefix, 'cluster_cpu', required=False)
+            cpu_str = global_conf.get(job_name_prefix, 'cluster_cpu', required=False)
         if cpu_str:
             try:
                 if "nodes" in cpu_str or '-N' in cpu_str:
@@ -142,11 +142,11 @@ class Scheduler(object):
 
         if self._host_cvmfs_cache is None:
 
-            self._host_cvmfs_cache = global_config_parser.param("container", 'host_cvmfs_cache',
-                                                                required=False, param_type="string")
+            self._host_cvmfs_cache = global_conf.get("container", 'host_cvmfs_cache',
+                                                     required=False, param_type="string")
             if not self._host_cvmfs_cache:
 
-                tmp_dir = global_config_parser.param("DEFAULT", 'tmp_dir', required=True)
+                tmp_dir = global_conf.get("DEFAULT", 'tmp_dir', required=True)
                 tmp_dir = utils.expandvars(tmp_dir)
 
                 if not tmp_dir:
@@ -160,7 +160,7 @@ class Scheduler(object):
     def cvmfs_cache(self):
 
         if self._cvmfs_cache is None:
-            self._cvmfs_cache = global_config_parser.param("container", 'cvmfs_cache', required=False, param_type="string")
+            self._cvmfs_cache = global_conf.get("container", 'cvmfs_cache', required=False, param_type="string")
             if not self._cvmfs_cache:
                 self._cvmfs_cache = "/cvmfs-cache"
 
@@ -169,7 +169,7 @@ class Scheduler(object):
     @property
     def bind(self):
         if self._bind is None:
-            self._bind = global_config_parser.param("container", 'bind_list', required=False, param_type='list')
+            self._bind = global_conf.get("container", 'bind_list', required=False, param_type='list')
 
             if not self._bind:
                 self._bind = ['/tmp', '/home']
@@ -316,7 +316,7 @@ module load {module_python}
 module unload {module_python} {command_separator}
 """.format(
             job2json_script=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "utils", "job2json.py"),
-            module_python=global_config_parser.param('DEFAULT', 'module_python'),
+            module_python=global_conf.get('DEFAULT', 'module_python'),
             step=step,
             jsonfiles=json_file_list,
             config_files=",".join([ os.path.abspath(c.name) for c in self._config_files ]),
@@ -330,12 +330,12 @@ class PBSScheduler(Scheduler):
     def __init__(self, *args, **kwargs):
         super(PBSScheduler, self).__init__(*args, **kwargs)
         # should be fed in the arguments but hey lets do that first.
-        self.config = global_config_parser
+        self.config = global_conf
         self._submit_cmd = 'qsub'
         self.name = 'PBS'
 
     def walltime(self, job_name_prefix):
-        walltime = self.config.param(job_name_prefix, 'cluster_walltime')
+        walltime = global_conf.get(job_name_prefix, 'cluster_walltime')
         # force the DD-HH:MM[:00] format to HH:MM[:00]
         time = utils.time_to_datetime(walltime)
         sec = int(time.seconds % 60)
@@ -348,7 +348,7 @@ class PBSScheduler(Scheduler):
         return '-W depend={}:'.format(condition)
 
     def memory(self, job_name_prefix):
-        mem_str = self.config.param(job_name_prefix, 'cluster_mem', required=False)
+        mem_str = global_conf.get(job_name_prefix, 'cluster_mem', required=False)
         try:
             mem = re.search("[0-9]+[a-zA-Z]*", mem_str).group()
         except AttributeError:
@@ -429,20 +429,20 @@ exit \$MUGQIC_STATE" | \\
                     job_name_prefix = job.name.split(".")[0]
                     cmd += \
                         self.submit_cmd + " " + \
-                        global_config_parser.param(job_name_prefix, 'cluster_other_arg') + " " + \
-                        global_config_parser.param(job_name_prefix, 'cluster_work_dir_arg') + " $OUTPUT_DIR " + \
-                        global_config_parser.param(job_name_prefix, 'cluster_output_dir_arg') + " $JOB_OUTPUT " + \
-                        global_config_parser.param(job_name_prefix, 'cluster_job_name_arg') + " $JOB_NAME " + \
+                        global_conf.get(job_name_prefix, 'cluster_other_arg') + " " + \
+                        global_conf.get(job_name_prefix, 'cluster_work_dir_arg') + " $OUTPUT_DIR " + \
+                        global_conf.get(job_name_prefix, 'cluster_output_dir_arg') + " $JOB_OUTPUT " + \
+                        global_conf.get(job_name_prefix, 'cluster_job_name_arg') + " $JOB_NAME " + \
                         self.walltime(job_name_prefix) + " " + \
                         self.memory(job_name_prefix) + " " + \
                         self.cpu(job_name_prefix) + " " + \
-                        global_config_parser.param(job_name_prefix, 'cluster_queue') + " "
+                        global_conf.get(job_name_prefix, 'cluster_queue') + " "
 
                     if job.dependency_jobs:
                         cmd += " " + self.dependency_arg(job_name_prefix) + "$JOB_DEPENDENCIES"
-                    cmd += " " + global_config_parser.param(job_name_prefix, 'cluster_submit_cmd_suffix')
+                    cmd += " " + global_conf.get(job_name_prefix, 'cluster_submit_cmd_suffix')
 
-                    if global_config_parser.param(job_name_prefix, 'cluster_cmd_produces_job_id'):
+                    if global_conf.get(job_name_prefix, 'cluster_cmd_produces_job_id'):
                         cmd = job.id + "=$(" + cmd + ")"
                     else:
                         cmd += "\n" + job.id + "=" + job.name
@@ -453,7 +453,7 @@ exit \$MUGQIC_STATE" | \\
                     self.genpipes_file.write(cmd)
 
         # Check cluster maximum job submission
-        cluster_max_jobs = global_config_parser.param('DEFAULT', 'cluster_max_jobs', param_type='posint', required=False)
+        cluster_max_jobs = global_conf.get('DEFAULT', 'cluster_max_jobs', param_type='posint', required=False)
         if cluster_max_jobs and len(pipeline.jobs) > cluster_max_jobs:
             logging.warning("Number of jobs: " + str(len(pipeline.jobs)) + " > Cluster maximum number of jobs: " + str(
                 cluster_max_jobs) + "!")
@@ -484,7 +484,7 @@ module load {module_python}
 module unload {module_python} {command_separator}
 """.format(
             job2json_script=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "utils", "job2json.py"),
-            module_python=config.param('DEFAULT', 'module_python'),
+            module_python=global_conf.get('DEFAULT', 'module_python'),
             step=step,
             jsonfiles=json_file_list,
             config_files=",".join([ os.path.abspath(c.name) for c in self._config_files ]),
@@ -540,11 +540,11 @@ class SlurmScheduler(Scheduler):
     def __init__(self, *args, **kwargs):
         super(SlurmScheduler, self).__init__(*args, **kwargs)
         self.name = 'SLURM'
-        self.config = global_config_parser
+        self.config = global_conf
         self._submit_cmd = 'sbatch'
 
     def walltime(self, job_name_prefix):
-        walltime = self.config.param(job_name_prefix, 'cluster_walltime')
+        walltime = global_conf.get(job_name_prefix, 'cluster_walltime')
         # force the DD-HH:MM[:00] format to HH:MM[:00]
         time = utils.time_to_datetime(walltime)
         sec = int(time.seconds % 60)
@@ -568,7 +568,7 @@ class SlurmScheduler(Scheduler):
 
     def memory(self, job_name_prefix):
         config_str = 'cluster_mem'
-        mem_str = self.config.param(job_name_prefix, config_str, required=False)
+        mem_str = global_conf.get(job_name_prefix, config_str, required=False)
         try:
             mem = re.search("[0-9]+[a-zA-Z]*", mem_str).group()
         except AttributeError:
@@ -658,22 +658,22 @@ exit \$MUGQIC_STATE" | \\
                     job_name_prefix = job.name.split(".")[0]
                     cmd += \
                         self.submit_cmd + " " + \
-                        global_config_parser.param(job_name_prefix, 'cluster_other_arg') + " " + \
-                        global_config_parser.param(job_name_prefix, 'cluster_work_dir_arg') + " $OUTPUT_DIR " + \
-                        global_config_parser.param(job_name_prefix, 'cluster_output_dir_arg') + " $JOB_OUTPUT " + \
-                        global_config_parser.param(job_name_prefix, 'cluster_job_name_arg') + " $JOB_NAME " + \
+                        global_conf.get(job_name_prefix, 'cluster_other_arg') + " " + \
+                        global_conf.get(job_name_prefix, 'cluster_work_dir_arg') + " $OUTPUT_DIR " + \
+                        global_conf.get(job_name_prefix, 'cluster_output_dir_arg') + " $JOB_OUTPUT " + \
+                        global_conf.get(job_name_prefix, 'cluster_job_name_arg') + " $JOB_NAME " + \
                         self.walltime(job_name_prefix) + " " + \
                         self.memory(job_name_prefix) + " " + \
                         self.cpu(job_name_prefix) + " " + \
                         self.node(job_name_prefix) + " " + \
                         self.gpu(job_name_prefix) + " " + \
-                        global_config_parser.param(job_name_prefix, 'cluster_queue') + " "
+                        global_conf.get(job_name_prefix, 'cluster_queue') + " "
 
                     if job.dependency_jobs:
                         cmd += " " + self.dependency_arg(job_name_prefix) + "$JOB_DEPENDENCIES"
-                    cmd += " " + global_config_parser.param(job_name_prefix, 'cluster_submit_cmd_suffix')
+                    cmd += " " + global_conf.get(job_name_prefix, 'cluster_submit_cmd_suffix')
 
-                    if global_config_parser.param(job_name_prefix, 'cluster_cmd_produces_job_id'):
+                    if global_conf.get(job_name_prefix, 'cluster_cmd_produces_job_id'):
                         cmd = job.id + "=$(" + cmd + ")"
                     else:
                         cmd += "\n" + job.id + "=" + job.name
@@ -688,7 +688,7 @@ exit \$MUGQIC_STATE" | \\
                     self.genpipes_file.write(cmd)
         logger.info("\nGenpipes file generated\"")
         # Check cluster maximum job submission
-        cluster_max_jobs = global_config_parser.param('DEFAULT', 'cluster_max_jobs', param_type='posint', required=False)
+        cluster_max_jobs = global_conf.get('DEFAULT', 'cluster_max_jobs', param_type='posint', required=False)
         if cluster_max_jobs and len(pipeline.jobs) > cluster_max_jobs:
             logger.warning("Number of jobs: " + str(len(pipeline.jobs)) + " > Cluster maximum number of jobs: " + str(
                 cluster_max_jobs) + "!")
@@ -738,14 +738,14 @@ class DaemonScheduler(Scheduler):
                         "job_cluster_options": {
                             # Cluster settings section must match job name prefix before first "."
                             # e.g. "[trimmomatic] cluster_cpu=..." for job name "trimmomatic.readset1"
-                            'cluster_submit_cmd': global_config_parser.param(job.name.split(".")[0], 'cluster_submit_cmd'),
-                            'cluster_other_arg': global_config_parser.param(job.name.split(".")[0], 'cluster_other_arg'),
-                            'cluster_work_dir_arg': global_config_parser.param(job.name.split(".")[0], 'cluster_work_dir_arg') + " " + pipeline.output_dir,
-                            'cluster_output_dir_arg': global_config_parser.param(job.name.split(".")[0], 'cluster_output_dir_arg') + " " + os.path.join(pipeline.output_dir, "job_output", step.name, job.name + ".o"),
-                            'cluster_job_name_arg': global_config_parser.param(job.name.split(".")[0], 'cluster_job_name_arg') + " " + job.name,
-                            'cluster_walltime': global_config_parser.param(job.name.split(".")[0], 'cluster_walltime'),
-                            'cluster_queue': global_config_parser.param(job.name.split(".")[0], 'cluster_queue'),
-                            'cluster_cpu': global_config_parser.param(job.name.split(".")[0], 'cluster_cpu')
+                            'cluster_submit_cmd': global_conf.get(job.name.split(".")[0], 'cluster_submit_cmd'),
+                            'cluster_other_arg': global_conf.get(job.name.split(".")[0], 'cluster_other_arg'),
+                            'cluster_work_dir_arg': global_conf.get(job.name.split(".")[0], 'cluster_work_dir_arg') + " " + pipeline.output_dir,
+                            'cluster_output_dir_arg': global_conf.get(job.name.split(".")[0], 'cluster_output_dir_arg') + " " + os.path.join(pipeline.output_dir, "job_output", step.name, job.name + ".o"),
+                            'cluster_job_name_arg': global_conf.get(job.name.split(".")[0], 'cluster_job_name_arg') + " " + job.name,
+                            'cluster_walltime': global_conf.get(job.name.split(".")[0], 'cluster_walltime'),
+                            'cluster_queue': global_conf.get(job.name.split(".")[0], 'cluster_queue'),
+                            'cluster_cpu': global_conf.get(job.name.split(".")[0], 'cluster_cpu')
                         },
                         "job_done": job.done
                     } for job in step.jobs]

@@ -32,7 +32,7 @@ import itertools
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))))
 
 # MUGQIC Modules
-from core.config import global_config_parser, _raise, SanitycheckError
+from core.config import global_conf, _raise, SanitycheckError
 from core.job import Job, concat_jobs
 import utils.utils
 from bfx.readset import parse_illumina_readset_file
@@ -184,7 +184,7 @@ class MethylSeq(dnaseq.DnaSeqRaw):
                     sambamba.flagstat(
                         output_bam,
                         re.sub(".bam", "_flagstat.txt", output_bam),
-                        global_config_parser.param('sambamba_flagstat', 'flagstat_options')
+                        global_conf.get('sambamba_flagstat', 'flagstat_options')
                     )
                 ], name="sambamba_flagstat." + readset.name, samples=[readset.sample])
             )
@@ -203,8 +203,8 @@ pandoc --to=markdown \\
   --variable assembly="{assembly}" \\
   {report_template_dir}/{basename_report_file} \\
   > {report_file}""".format(
-                    scientific_name=global_config_parser.param('bismark_align', 'scientific_name'),
-                    assembly=global_config_parser.param('bismark_align', 'assembly'),
+                    scientific_name=global_conf.get('bismark_align', 'scientific_name'),
+                    assembly=global_conf.get('bismark_align', 'assembly'),
                     report_template_dir=self.report_template_dir,
                     basename_report_file=os.path.basename(report_file),
                     report_file=report_file
@@ -269,8 +269,8 @@ pandoc --to=markdown \\
   #--variable assembly="{assembly}" \\
   #{report_template_dir}/{basename_report_file} \\
   #> {report_file}""".format(
-                    #scientific_name=config.param('bismark_align', 'scientific_name'),
-                    #assembly=config.param('bismark_align', 'assembly'),
+                    #scientific_name=global_conf.get('bismark_align', 'scientific_name'),
+                    #assembly=global_conf.get('bismark_align', 'assembly'),
                     #report_template_dir=self.report_template_dir,
                     #basename_report_file=os.path.basename(report_file),
                     #report_file=report_file
@@ -393,7 +393,7 @@ cp \\
                 input,
                 re.sub("bam", "coverage.tsv", input),
                 coverage_bed,
-                other_options=global_config_parser.param('bvatools_depth_of_coverage', 'other_options', required=False)
+                other_options=global_conf.get('bvatools_depth_of_coverage', 'other_options', required=False)
             )
             job.name = "bvatools_depth_of_coverage." + sample.name
             job.samples = [sample]
@@ -477,7 +477,7 @@ cp \\
                 samtools.view(
                     input,
                     re.sub(".bam", ".filtered_reads.counts.txt", input),
-                    "-c " + global_config_parser.param('mapping_quality_filter', 'quality_threshold')
+                    "-c " + global_conf.get('mapping_quality_filter', 'quality_threshold')
                 )
             ])
             job.name = "mapping_quality_filter." + sample.name

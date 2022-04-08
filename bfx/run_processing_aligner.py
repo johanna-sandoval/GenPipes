@@ -22,7 +22,7 @@ import os
 import re
 
 from core.job import concat_jobs, pipe_jobs, Job
-from core.config import global_config_parser
+from core.config import global_conf
 from bfx import bvatools
 from bfx import snpeff
 from bfx import verify_bam_id
@@ -65,8 +65,8 @@ class RunProcessingAligner(object):
                "\tSM:" + readset.sample.name + \
                "\tLB:" + readset.library + \
                "\tPU:run" + readset.run + "_" + readset.lane + \
-               ("\tCN:" + global_config_parser.param(ini_section, 'sequencing_center')
-                if global_config_parser.param(ini_section, 'sequencing_center', required=False) else "") + \
+               ("\tCN:" + global_conf.get(ini_section, 'sequencing_center')
+                if global_conf.get(ini_section, 'sequencing_center', required=False) else "") + \
                "\tPL:Illumina" + \
                "'"
 
@@ -148,7 +148,7 @@ class BwaRunProcessingAligner(RunProcessingAligner):
             if (not os.path.exists(full_coverage_bed)) and \
                     (coverage_bed not in BwaRunProcessingAligner.downloaded_bed_files):
                 # Download the bed file
-                command = global_config_parser.param('DEFAULT', 'fetch_bed_file_command').format(
+                command = global_conf.get('DEFAULT', 'fetch_bed_file_command').format(
                     output_directory=self.output_dir,
                     filename=coverage_bed
                 )
@@ -177,7 +177,7 @@ class BwaRunProcessingAligner(RunProcessingAligner):
             input,
             input_file_prefix + "metrics.targetCoverage.txt",
             full_coverage_bed,
-            other_options=global_config_parser.param('bvatools_depth_of_coverage', 'other_options', required=False),
+            other_options=global_conf.get('bvatools_depth_of_coverage', 'other_options', required=False),
             reference_genome=readset.reference_file
         )
         job.name = "bvatools_depth_of_coverage." + readset.name + ".doc" + "." + readset.run + "." + readset.lane
@@ -277,7 +277,7 @@ class StarRunProcessingAligner(RunProcessingAligner):
     def get_alignment_job(self, readset):
         output = readset.bam + ".bam"
 
-        rg_center = global_config_parser.param('star_align', 'sequencing_center', required=False)
+        rg_center = global_conf.get('star_align', 'sequencing_center', required=False)
 
         # We can't set the exact bam filename for STAR, so we output the result in a specific directory, and move the
         # bam to the expected place with the right name.

@@ -38,7 +38,7 @@ import textwrap
 from uuid import uuid4
 
 # MUGQIC Modules
-from .config import _raise, SanitycheckError, global_config_parser
+from .config import _raise, SanitycheckError, global_conf
 from .job import Job
 from .scheduler import create_scheduler
 from .step import Step
@@ -58,7 +58,7 @@ class Pipeline(object):
 
         self._timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
-        self.config_parser = global_config_parser
+        self.config_parser = global_conf
 
         self.sanity_check = sanity_check
         if sanity_check:
@@ -386,7 +386,7 @@ class Pipeline(object):
         # Now create the json dumps for all the samples if not already done
         if self.json:
             # Check if portal_output_dir is set from a valid environment variable
-            self.portal_output_dir = self.config_parser.param('DEFAULT', 'portal_output_dir', required=False)
+            self.portal_output_dir = self.config_parser.get('DEFAULT', 'portal_output_dir', required=False)
             log.info(self.portal_output_dir.startswith("$"))
             log.info(os.environ.get(re.search("^\$(.*)\/?", self.portal_output_dir).group(1)))
             if self.portal_output_dir.startswith("$") and (os.environ.get(re.search("^\$(.*)\/?", self.portal_output_dir).group(1)) is None or os.environ.get(re.search("^\$(.*)\/?", self.portal_output_dir).group(1)) == ""):
@@ -452,11 +452,11 @@ pandoc \\
   {report_files} \\
   report/config_and_references.md \\
   --output report/index.html""".format(
-                module_pandoc=self.config_parser.param('report', 'module_pandoc'),
+                module_pandoc=self.config_parser.get('report', 'module_pandoc'),
                 output_dir=output_dir,
                 config_file=self.config_parser.filepath,
                 self=self,
-                title=self.config_parser.param('report', 'title'),
+                title=self.config_parser.get('report', 'title'),
                 introduction=os.path.join(self.report_template_dir, self.__class__.__name__ + '.introduction.md'),
                 date=datetime.datetime.now().strftime("%Y-%m-%d"),
                 report_files=" \\\n  ".join(report_files)

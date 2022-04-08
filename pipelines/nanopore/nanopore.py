@@ -32,7 +32,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 # MUGQIC Modules
 import utils.utils
-from core.config import global_config_parser, SanitycheckError, _raise
+from core.config import global_conf, SanitycheckError, _raise
 from core.job import Job, concat_jobs, pipe_jobs
 from bfx.readset import parse_nanopore_readset_file
 from pipelines import common
@@ -157,7 +157,7 @@ class Nanopore(common.Nanopore):
                             sambamba.sort(
                                 "/dev/stdin",
                                 out_bam,
-                                tmp_dir=global_config_parser.param('minimap2_align', 'tmp_dir', required=True),
+                                tmp_dir=global_conf.get('minimap2_align', 'tmp_dir', required=True),
                             )
                         ]
                     ),

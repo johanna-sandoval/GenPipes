@@ -25,7 +25,7 @@ import os
 import sys
 
 # MUGQIC Modules
-from .config import global_config_parser
+from .config import global_conf
 
 log = logging.getLogger(__name__)
 
@@ -43,8 +43,8 @@ class Job(object):
         self._removable_files = [_f for _f in removable_files if _f]
 
         # Retrieve modules from config, removing duplicates but keeping the order
-        self._modules = list(OrderedDict.fromkeys([global_config_parser.param(section, option)
-                                                               for section, option in module_entries]))
+        self._modules = list(OrderedDict.fromkeys([global_conf.get(section, option)
+                                                   for section, option in module_entries]))
 
         self._name = name
         self._command = command

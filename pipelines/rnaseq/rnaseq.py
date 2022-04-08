@@ -32,7 +32,7 @@ import subprocess
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))))
 
 # MUGQIC Modules
-from core.config import global_config_parser, _raise, SanitycheckError
+from core.config import global_conf, _raise, SanitycheckError
 from core.job import Job, concat_jobs, pipe_jobs
 import utils.utils
 
@@ -136,8 +136,8 @@ class RnaSeqRaw(common.Illumina):
                 _raise(SanitycheckError("Error: run type \"" + readset.run_type +
                 "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!"))
 
-            rg_platform = global_config_parser.param('star_align', 'platform', required=False)
-            rg_center = global_config_parser.param('star_align', 'sequencing_center', required=False)
+            rg_platform = global_conf.get('star_align', 'platform', required=False)
+            rg_center = global_conf.get('star_align', 'sequencing_center', required=False)
 
             job = star.align(
                 reads1=fastq1,
@@ -194,8 +194,8 @@ class RnaSeqRaw(common.Illumina):
                 _raise(SanitycheckError("Error: run type \"" + readset.run_type +
                 "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!"))
 
-            rg_platform = global_config_parser.param('star_align', 'platform', required=False)
-            rg_center = global_config_parser.param('star_align', 'sequencing_center', required=False)
+            rg_platform = global_conf.get('star_align', 'platform', required=False)
+            rg_center = global_conf.get('star_align', 'sequencing_center', required=False)
 
             job = star.align(
                 reads1=fastq1,
@@ -243,8 +243,8 @@ pandoc --to=markdown \\
   --variable assembly="{assembly}" \\
   {report_template_dir}/{basename_report_file} \\
   > {report_file}""".format(
-                    scientific_name=global_config_parser.param('star', 'scientific_name'),
-                    assembly=global_config_parser.param('star', 'assembly'),
+                    scientific_name=global_conf.get('star', 'scientific_name'),
+                    assembly=global_conf.get('star', 'assembly'),
                     report_template_dir=self.report_template_dir,
                     basename_report_file=os.path.basename(report_file),
                     report_file=report_file
@@ -360,7 +360,7 @@ awk 'BEGIN {{OFS="\\t"}} {{if (substr($1,1,1)=="@") {{print;next}}; split($6,C,/
         input_bams = [sample_row[1] for sample_row in sample_rows]
         output_directory = os.path.join("metrics", "rnaseqRep")
         # Use GTF with transcript_id only otherwise RNASeQC fails
-        gtf_transcript_id = global_config_parser.param('rnaseqc', 'gtf_transcript_id', param_type='filepath')
+        gtf_transcript_id = global_conf.get('rnaseqc', 'gtf_transcript_id', param_type='filepath')
 
         jobs.append(concat_jobs([
             Job(command="mkdir -p " + output_directory, removable_files=[output_directory], samples=self.samples),
@@ -368,7 +368,7 @@ awk 'BEGIN {{OFS="\\t"}} {{if (substr($1,1,1)=="@") {{print;next}}; split($6,C,/
 echo "Sample\tBamFile\tNote
 {sample_rows}" \\
   > {sample_file}""".format(sample_rows="\n".join(["\t".join(sample_row) for sample_row in sample_rows]), sample_file=sample_file)),
-            metrics.rnaseqc(sample_file, output_directory, self.run_type == "SINGLE_END", gtf_file=gtf_transcript_id, reference=global_config_parser.param('rnaseqc', 'genome_fasta', param_type='filepath'), ribosomal_interval_file=global_config_parser.param('rnaseqc', 'ribosomal_fasta', param_type='filepath')),
+            metrics.rnaseqc(sample_file, output_directory, self.run_type == "SINGLE_END", gtf_file=gtf_transcript_id, reference=global_conf.get('rnaseqc', 'genome_fasta', param_type='filepath'), ribosomal_interval_file=global_conf.get('rnaseqc', 'ribosomal_fasta', param_type='filepath')),
             Job([], [output_directory + ".zip"], command="zip -r {output_directory}.zip {output_directory}".format(output_directory=output_directory))
         ], name="rnaseqc"))
 
@@ -438,7 +438,7 @@ pandoc \\
         """
 
         jobs = []
-        reference_file = global_config_parser.param('picard_rna_metrics', 'genome_fasta', param_type='filepath')
+        reference_file = global_conf.get('picard_rna_metrics', 'genome_fasta', param_type='filepath')
         for sample in self.samples:
                 alignment_file = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam")
                 output_directory = os.path.join("metrics", sample.name)
@@ -485,10 +485,10 @@ pandoc \\
                             "\tSM:" + readset.sample.name + \
                                    ("\tLB:" + readset.library if readset.library else "") + \
                                    ("\tPU:run" + readset.run + "_" + readset.lane if readset.run and readset.lane else "") + \
-                                   ("\tCN:" + global_config_parser.param('bwa_mem_rRNA', 'sequencing_center') if global_config_parser.param('bwa_mem_rRNA', 'sequencing_center', required=False) else "") + \
+                                   ("\tCN:" + global_conf.get('bwa_mem_rRNA', 'sequencing_center') if global_conf.get('bwa_mem_rRNA', 'sequencing_center', required=False) else "") + \
                             "\tPL:Illumina" + \
                             "'",
-                        ref=global_config_parser.param('bwa_mem_rRNA', 'ribosomal_fasta'),
+                        ref=global_conf.get('bwa_mem_rRNA', 'ribosomal_fasta'),
                         ini_section='bwa_mem_rRNA'
                     ),
                     picard.sort_sam(
@@ -500,7 +500,7 @@ pandoc \\
                 ]),
                 tools.py_rrnaBAMcount (
                     bam=readset_metrics_bam,
-                    gtf=global_config_parser.param('bwa_mem_rRNA', 'gtf'),
+                    gtf=global_conf.get('bwa_mem_rRNA', 'gtf'),
                     output=os.path.join(output_folder,readset.name+"rRNA.stats.tsv"),
                     typ="transcript")], name="bwa_mem_rRNA." + readset.name )
 
@@ -531,7 +531,7 @@ pandoc \\
             bed_graph_prefix = os.path.join("tracks", sample.name, sample.name)
             big_wig_prefix = os.path.join("tracks", "bigWig", sample.name)
 
-            if (global_config_parser.param('DEFAULT', 'strand_info') != 'fr-unstranded') and library[sample] == "PAIRED_END":
+            if (global_conf.get('DEFAULT', 'strand_info') != 'fr-unstranded') and library[sample] == "PAIRED_END":
                 input_bam_f1 = bam_file_prefix + "tmp1.forward.bam"
                 input_bam_f2 = bam_file_prefix + "tmp2.forward.bam"
                 input_bam_r1 = bam_file_prefix + "tmp1.reverse.bam"
@@ -606,7 +606,7 @@ pandoc \\
 
             # Count reads
             output_count = os.path.join("raw_counts", sample.name + ".readcounts.csv")
-            stranded = "no" if global_config_parser.param('DEFAULT', 'strand_info') == "fr-unstranded" else "reverse"
+            stranded = "no" if global_conf.get('DEFAULT', 'strand_info') == "fr-unstranded" else "reverse"
             job = concat_jobs([
                 Job(command="mkdir -p raw_counts"),
                 pipe_jobs([
@@ -616,9 +616,9 @@ pandoc \\
                         ),
                         htseq.htseq_count(
                         "-",
-                        global_config_parser.param('htseq_count', 'gtf', param_type='filepath'),
+                        global_conf.get('htseq_count', 'gtf', param_type='filepath'),
                         output_count,
-                        global_config_parser.param('htseq_count', 'options'),
+                        global_conf.get('htseq_count', 'options'),
                         stranded
                         )
                 ])
@@ -659,7 +659,7 @@ do
 done && \\
 echo -e $HEAD | cat - {output_directory}/tmpMatrix.txt | tr ' ' '\\t' > {output_matrix} && \\
 rm {output_directory}/tmpSort.txt {output_directory}/tmpMatrix.txt""".format(
-            reference_gtf=global_config_parser.param('raw_counts_metrics', 'gtf', param_type='filepath'),
+            reference_gtf=global_conf.get('raw_counts_metrics', 'gtf', param_type='filepath'),
             output_directory=output_directory,
             read_count_files=" \\\n  ".join(read_count_files),
             output_matrix=output_matrix
@@ -677,7 +677,7 @@ rm {output_directory}/tmpSort.txt {output_directory}/tmpMatrix.txt""".format(
 
         wiggle_directory = os.path.join("tracks", "bigWig")
         wiggle_archive = "tracks.zip"
-        if global_config_parser.param('DEFAULT', 'strand_info') != 'fr-unstranded':
+        if global_conf.get('DEFAULT', 'strand_info') != 'fr-unstranded':
             wiggle_files = []
             for sample in self.samples:
                 if library[sample] == "PAIRED_END":
@@ -688,7 +688,7 @@ rm {output_directory}/tmpSort.txt {output_directory}/tmpMatrix.txt""".format(
 
         # RPKM and Saturation
         count_file = os.path.join("DGE", "rawCountMatrix.csv")
-        gene_size_file = global_config_parser.param('rpkm_saturation', 'gene_size', param_type='filepath')
+        gene_size_file = global_conf.get('rpkm_saturation', 'gene_size', param_type='filepath')
         rpkm_directory = "raw_counts"
         saturation_directory = os.path.join("metrics", "saturation")
 
@@ -736,7 +736,7 @@ pandoc --to=markdown \\
         """
         jobs = []
 
-        gtf = global_config_parser.param('stringtie', 'gtf', param_type='filepath')
+        gtf = global_conf.get('stringtie', 'gtf', param_type='filepath')
         for sample in self.samples:
             input_bam = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.hardClip.bam")
             output_directory = os.path.join("stringtie", sample.name)
@@ -757,7 +757,7 @@ pandoc --to=markdown \\
         output_directory = os.path.join("stringtie", "AllSamples")
         sample_file = os.path.join("stringtie", "stringtie-merge.samples.txt")
         input_gtfs = [os.path.join("stringtie", sample.name, "transcripts.gtf") for sample in self.samples]
-        gtf = global_config_parser.param('stringtie', 'gtf', param_type='filepath')
+        gtf = global_conf.get('stringtie', 'gtf', param_type='filepath')
 
 
         job = concat_jobs([
@@ -824,7 +824,7 @@ END
 
         jobs = []
 
-        gtf = global_config_parser.param('cufflinks', 'gtf', param_type='filepath')
+        gtf = global_conf.get('cufflinks', 'gtf', param_type='filepath')
         for sample in self.samples:
             input_bam = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.hardClip.bam")
             output_directory = os.path.join("cufflinks", sample.name)
@@ -846,7 +846,7 @@ END
         output_directory = os.path.join("cufflinks", "AllSamples")
         sample_file = os.path.join("cufflinks", "cuffmerge.samples.txt")
         input_gtfs = [os.path.join("cufflinks", sample.name, "transcripts.gtf") for sample in self.samples]
-        gtf = global_config_parser.param('cuffmerge', 'gtf', param_type='filepath')
+        gtf = global_conf.get('cuffmerge', 'gtf', param_type='filepath')
 
 
         job = concat_jobs([
@@ -981,7 +981,7 @@ END
             gq_seq_utils.exploratory_analysis_rnaseq(
                 os.path.join("DGE", "rawCountMatrix.csv"),
                 "cuffnorm",
-                global_config_parser.param('gq_seq_utils_exploratory_analysis_rnaseq', 'genes', param_type='filepath'),
+                global_conf.get('gq_seq_utils_exploratory_analysis_rnaseq', 'genes', param_type='filepath'),
                 "exploratory"
             )
         ], name="gq_seq_utils_exploratory_analysis_rnaseq"))
@@ -1063,7 +1063,7 @@ cp \\
             # goseq for differential gene expression results
             job = differential_expression.goseq(
                 os.path.join("DGE", contrast.name, "dge_results.csv"),
-                global_config_parser.param("differential_expression_goseq", "dge_input_columns"),
+                global_conf.get("differential_expression_goseq", "dge_input_columns"),
                 os.path.join("DGE", contrast.name, "gene_ontology_results.csv")
             )
             job.name = "differential_expression_goseq.dge." + contrast.name
@@ -1120,7 +1120,7 @@ done""".format(
                     design_file=os.path.abspath(self.design_file.name),
                     report_template_dir=self.report_template_dir,
                     basename_report_file=os.path.basename(report_file),
-                    adj_pvalue_threshold=global_config_parser.param('differential_expression_goseq', 'other_options').split(" ")[1],
+                    adj_pvalue_threshold=global_conf.get('differential_expression_goseq', 'other_options').split(" ")[1],
                     report_file=report_file,
                     contrasts=" ".join([contrast.name for contrast in self.contrasts])
                 ),
@@ -1136,7 +1136,7 @@ done""".format(
         Generate IHEC's standard metrics.
         """
 
-        genome = global_config_parser.param('ihec_metrics', 'assembly')
+        genome = global_conf.get('ihec_metrics', 'assembly')
 
         return [metrics.ihec_metrics_rnaseq(genome)]
 

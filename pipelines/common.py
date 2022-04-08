@@ -33,7 +33,7 @@ import collections
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))))
 
 # MUGQIC Modules
-from core.config import global_config_parser, _raise, SanitycheckError
+from core.config import global_conf, _raise, SanitycheckError
 from core.job import Job, concat_jobs
 from core.pipeline import Pipeline
 from bfx.design import parse_design_file
@@ -294,7 +294,7 @@ class Illumina(MUGQICPipeline):
     def trimmomatic(self):
         """
         Raw reads quality trimming and removing of Illumina adapters is performed using [Trimmomatic](http://www.usadellab.org/cms/index.php?page=trimmomatic).
-        If an adapter FASTA file is specified in the config file (section 'trimmomatic', param 'adapter_fasta'),
+        If an adapter FASTA file is specified in the config file (section 'trimmomatic', get 'adapter_fasta'),
         it is used first. Else, 'Adapter1' and 'Adapter2' columns from the readset file are used to create
         an adapter FASTA file, given then to Trimmomatic. For PAIRED_END readsets, readset adapters are
         reversed-complemented and swapped, to match Trimmomatic Palindrome strategy. For SINGLE_END readsets,
@@ -312,7 +312,7 @@ class Illumina(MUGQICPipeline):
             trim_log = trim_file_prefix + "log"
 
             # Use adapter FASTA in config file if any, else create it from readset file
-            adapter_fasta = global_config_parser.param('trimmomatic', 'adapter_fasta', required=False, param_type='filepath')
+            adapter_fasta = global_conf.get('trimmomatic', 'adapter_fasta', required=False, param_type='filepath')
             adapter_job = None
             if not adapter_fasta:
                 adapter_fasta = trim_file_prefix + "adapters.fa"
@@ -459,8 +459,8 @@ pandoc \\
   --variable trim_readset_table="$trim_readset_table_md" \\
   --to markdown \\
   > {report_file}""".format(
-                    trailing_min_quality=global_config_parser.param('trimmomatic', 'trailing_min_quality', param_type='int'),
-                    min_length=global_config_parser.param('trimmomatic', 'min_length', param_type='posint'),
+                    trailing_min_quality=global_conf.get('trimmomatic', 'trailing_min_quality', param_type='int'),
+                    min_length=global_conf.get('trimmomatic', 'min_length', param_type='posint'),
                     read_type=read_type,
                     report_template_dir=self.report_template_dir,
                     readset_merge_trim_stats=readset_merge_trim_stats,
@@ -481,9 +481,9 @@ pandoc \\
         """
 
         # Known variants file
-        population_AF = global_config_parser.param('verify_bam_id', 'population_AF', required=False)
-        candidate_input_files = [[global_config_parser.param('verify_bam_id', 'verifyBamID_variants_file', required=False)]]
-        candidate_input_files.append([global_config_parser.param('verify_bam_id', 'verifyBamID_variants_file', required=False) + ".gz"])
+        population_AF = global_conf.get('verify_bam_id', 'population_AF', required=False)
+        candidate_input_files = [[global_conf.get('verify_bam_id', 'verifyBamID_variants_file', required=False)]]
+        candidate_input_files.append([global_conf.get('verify_bam_id', 'verifyBamID_variants_file', required=False) + ".gz"])
         [known_variants_annotated] = self.select_input_files(candidate_input_files)
         verify_bam_id_directory = "verify_bam_id"
         variants_directory = "variants"
@@ -580,7 +580,7 @@ pandoc \\
                 job = samtools.view(
                     input_bam,
                     output_cram,
-                    options=global_config_parser.param('samtools_cram_output', 'options'),
+                    options=global_conf.get('samtools_cram_output', 'options'),
                     removable=False
                 )
 

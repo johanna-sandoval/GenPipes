@@ -21,7 +21,7 @@
 import os
 
 # MUGQIC Modules
-from core.config import global_config_parser
+from core.config import global_conf
 from core.job import Job
 from utils import utils
 
@@ -39,6 +39,6 @@ python $PYTHONTOOLS/format2pcgr.py {options} \\
         -o {output}""".format(
             input=input_vcf,
 			output=output_vcf,
-            options=global_config_parser.param('format_vcf', 'options'),
+            options=global_conf.get('format_vcf', 'options'),
         )
     )
