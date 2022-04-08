@@ -62,7 +62,7 @@ def align(
         [['star_align', 'module_star']],
         removable_files=[os.path.join(output_directory, bam_name)]
     )
-    ## Get get from config file
+    ## Get param from config file
     num_threads = global_conf.get('star_align', 'threads', param_type='int')
     ram_limit = global_conf.get('star_align', 'ram')
     max_ram = int(utils.number_symbol_converter(ram_limit))

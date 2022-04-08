@@ -89,7 +89,7 @@ class Config(configparser.SafeConfigParser):
 
         log.info("module check finished\n")
 
-    # Retrieve get in config files with optional definition check and type validation
+    # Retrieve param in config files with optional definition check and type validation
     # By default, parameter is required to be defined in one of the config file
     def get(self, section, option, required=True, param_type='string'):
         # Store original section for future error message, in case 'DEFAULT' section is used eventually

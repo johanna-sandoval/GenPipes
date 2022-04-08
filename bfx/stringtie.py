@@ -25,7 +25,7 @@ from core.config import *
 from core.job import *
 
 def stringtie(input_bam, output_directory, gtf=None, abund=False):
-    ## Get get from config file
+    ## Get param from config file
     stranded = global_conf.get('stringtie', 'strand_info')
 
     ## Check library type for strand information

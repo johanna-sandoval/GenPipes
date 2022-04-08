@@ -298,8 +298,8 @@ is_up2date() {
 
 cmd_or_job() {
   CMD=$1
-  CORES=${2:-1}  # Nb cores = 2nd get if defined else 1
-  JOB_PREFIX=${3:-$CMD}  # Job prefix = 3rd get if defined else cmd name
+  CORES=${2:-1}  # Nb cores = 2nd param if defined else 1
+  JOB_PREFIX=${3:-$CMD}  # Job prefix = 3rd param if defined else cmd name
   JOB_NAME=$JOB_PREFIX
   MEMORY=${4:-31G}
 
