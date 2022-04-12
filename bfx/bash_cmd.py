@@ -266,10 +266,10 @@ def zip(
         input_string = " ".join([os.path.basename(input_file) for input_file in inputs])
 
     else:
-        # if the input is a foler path
+        # if the input is a folder path
         if os.path.isdir(inputs):
             inputs_dir = inputs
-            inputs = None
+            inputs = [None]
             input_string = "*"
 
         # if the input is a single file
