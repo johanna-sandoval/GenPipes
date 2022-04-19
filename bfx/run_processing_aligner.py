@@ -620,16 +620,6 @@ class CellrangerRunProcessingAligner(RNARunProcessingAligner):
         )
 
     def get_alignment_job(self, readset):
-        cell_count_job = cellranger.count(
-            read1=readset.fastq1,
-            read2=readset.fastq2,
-            sample_id=readset.name + "_" + readset.sample_number,
-            lane_id=readset.lane,
-            project=readset.project,
-            fastqs=os.path.dirname(readset.fastq1),
-            transcriptome=self.get_reference_index()
-        )
-
         outdir = os.path.join(
             self.output_dir,
             "10x_cellcount." + readset.lane,
