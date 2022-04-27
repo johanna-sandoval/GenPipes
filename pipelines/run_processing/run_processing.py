@@ -36,8 +36,6 @@ import xml.etree.ElementTree as Xml
 from collections import Counter
 from collections import OrderedDict
 
-
-
 # Append genpipes directory to Python library path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))))
 
@@ -2429,7 +2427,7 @@ class RunProcessing(common.MUGQICPipeline):
             for step in self.step_list:
                 report_step_jobs = []
                 if step.name in ['basecall', 'fastq', 'index']:
-                    step_report_files = list(set([report_file for readset in self.readsets[lane] for report_file in readset.report_files[step.name]]))
+                    step_report_files = list(set([report_file for readset in self.readsets[lane] for report_file in readset.report_files[step.name] if step.name in readset.report_files]))
                     if step_report_files:
                         report_job = tools.run_processing_metrics_to_json(
                              self.run_validation_report_json[lane],
