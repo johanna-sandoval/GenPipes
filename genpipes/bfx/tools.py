@@ -22,8 +22,8 @@ import os
 import re
 
 # MUGQIC Modules
-from core.config import global_conf
-from core.job import Job
+from ..core.config import global_conf
+from ..core.job import Job
 
 ## functions for awk tools ##
 

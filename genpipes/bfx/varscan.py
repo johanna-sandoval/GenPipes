@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def mpileupcns(input, output, sampleNamesFile, other_options=None):
 

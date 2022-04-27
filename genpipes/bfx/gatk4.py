@@ -23,9 +23,9 @@ import re
 import os
 
 # MUGQIC Modules
-import core
-from core.config import global_conf
-from core.job import Job
+from genpipes import core
+from ..core.config import global_conf
+from ..core.job import Job
 from . import gatk
 from . import picard2
 

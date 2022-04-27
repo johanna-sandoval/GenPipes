@@ -22,8 +22,7 @@ import os
 from packaging import version
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.job import *
 
 
 def guppy_basecalling(fast5_directory,

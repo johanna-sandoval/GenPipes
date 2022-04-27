@@ -22,8 +22,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def create_fend_object(chromosome_lengths_file, output_file,output_dir, res_chr, temp_dir):
 

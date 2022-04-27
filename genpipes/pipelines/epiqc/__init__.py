@@ -23,14 +23,14 @@ import os
 from shutil import copyfile
 
 # MUGQIC Modules
-from bfx import bigwiginfo
-from bfx import chromimpute
-from bfx import epigeec
-from bfx import epiqc_reports
-from bfx import genome
-from core.config import global_conf, _raise, SanitycheckError
-from core.job import Job, concat_jobs
-from pipelines import common
+from ...bfx import bigwiginfo
+from ...bfx import chromimpute
+from ...bfx import epigeec
+from ...bfx import epiqc_reports
+from ...bfx import genome
+from ...core.config import global_conf, _raise, SanitycheckError
+from ...core.job import Job, concat_jobs
+from .. import common
 
 log = logging.getLogger(__name__)
 

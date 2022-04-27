@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def genotyper(input_tumor, input_normal, input_vcf, output_vcf):
     if input_tumor is not None:

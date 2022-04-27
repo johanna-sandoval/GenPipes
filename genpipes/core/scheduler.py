@@ -26,7 +26,7 @@ import tempfile
 import textwrap
 from uuid import uuid4
 
-from utils import utils
+from ..utils import utils
 
 from .config import global_conf
 

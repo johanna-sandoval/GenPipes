@@ -10,7 +10,7 @@ import importlib
 from types import SimpleNamespace
 
 from .utils import container_wrapper_argparse
-
+from .version import __version__
 
 PIPELINES = [
 "AmpliconSeq",
@@ -66,7 +66,7 @@ def make_parser(argv):
         module = pipeline.lower()
         classname = pipeline.replace('_','')
         p_name = classname.lower()
-        p_module = importlib.import_module('pipelines.' + module)
+        p_module = importlib.import_module('.pipelines.' + module, package='genpipes')
         p_class = getattr(p_module, classname)
 
         epilog = p_class.process_help(argv)

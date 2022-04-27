@@ -20,8 +20,8 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def compute_effects(input, output, split=False, cancer_sample_file=[], options=[] ):
     output_stats = output + ".stats.csv"

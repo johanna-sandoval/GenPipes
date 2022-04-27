@@ -22,9 +22,9 @@ import os
 import logging
 import sys 
 # MUGQIC Modules
-from core.config import global_conf
-from core.job import Job
-from utils import utils 
+from ..core.config import global_conf
+from ..core.job import Job
+from ..utils import utils
 
 log = logging.getLogger(__name__)
 

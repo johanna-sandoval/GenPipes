@@ -21,16 +21,16 @@ import configparser
 import os
 import re
 
-from core.job import concat_jobs, pipe_jobs, Job
-from core.config import global_conf
-from bfx import bvatools
-from bfx import snpeff
-from bfx import verify_bam_id
-from bfx import bwa
-from bfx import metrics
-from bfx import picard
-from bfx import star
-from bfx import tools
+from ..core.job import concat_jobs, pipe_jobs, Job
+from ..core.config import global_conf
+from . import bvatools
+from . import snpeff
+from . import verify_bam_id
+from . import bwa
+from . import metrics
+from . import picard
+from . import star
+from . import tools
 
 
 class RunProcessingAligner(object):

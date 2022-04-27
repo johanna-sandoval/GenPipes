@@ -20,8 +20,8 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def merge_barcodes(reads1, reads2, outdir):
     outfile1 = outdir + "/reads1.fastq"

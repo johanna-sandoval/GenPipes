@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def batch(
         tumor_bam,

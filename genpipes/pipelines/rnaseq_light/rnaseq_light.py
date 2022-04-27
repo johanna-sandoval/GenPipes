@@ -32,19 +32,19 @@ import subprocess
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))))
 
 # MUGQIC Modules
-from core.config import global_conf, _raise, SanitycheckError
-from core.job import Job, concat_jobs
+from ...core.config import global_conf, _raise, SanitycheckError
+from ...core.job import Job, concat_jobs
 import utils.utils
 
-from bfx import bash_cmd as bash
-from bfx import gq_seq_utils
-from bfx import picard
-from bfx import rmarkdown
-from bfx import differential_expression
-from bfx import tools
+from ...bfx import bash_cmd as bash
+from ...bfx import gq_seq_utils
+from ...bfx import picard
+from ...bfx import rmarkdown
+from ...bfx import differential_expression
+from ...bfx import tools
 
-from pipelines import common
-from pipelines.rnaseq import rnaseq
+from .. import common
+from ..rnaseq import rnaseq
 
 log = logging.getLogger(__name__)
 

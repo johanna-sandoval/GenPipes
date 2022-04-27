@@ -17,8 +17,8 @@
 # along with MUGQIC Pipelines.  If not, see <http://www.gnu.org/licenses/>.
 ################################################################################
 
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def lumpyexpress_pair(normal_bam, tumor_bam, output_vcf, spl_normal=[], spl_tumor=[], dis_normal=[], dis_tumor=[]):
     if tumor_bam is not None and spl_tumor is not None and dis_tumor is not None:

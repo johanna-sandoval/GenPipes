@@ -21,7 +21,7 @@
 import re
 
 # MUGQIC Modules
-from core.config import _raise, SanitycheckError
+from ..core.config import _raise, SanitycheckError
 
 class UniqueName(type):
     """

@@ -27,7 +27,7 @@ import re
 # MUGQIC Modules
 from .run_processing_aligner import BwaRunProcessingAligner, StarRunProcessingAligner 
 from .sample import Sample, NanoporeSample
-from core.config import global_conf, _raise, SanitycheckError
+from ..core.config import global_conf, _raise, SanitycheckError
 
 log = logging.getLogger(__name__)
 

@@ -22,8 +22,8 @@
 import os
 # MUGQIC Modules
 
-from core.job import *
-from core.config import *
+from ..core.job import *
+from ..core.config import *
 
 def bigwiginfo_report(bigwiginfo_file, output_file):
     return Job(

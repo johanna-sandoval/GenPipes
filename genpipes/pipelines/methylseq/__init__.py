@@ -24,22 +24,22 @@ import os
 import re
 
 # MUGQIC Modules
-from bfx import bedtools
-from bfx import bismark
-from bfx import bissnp
-from bfx import bvatools
-from bfx import fgbio
-from bfx import gatk
-from bfx import igvtools
-from bfx import metrics
-from bfx import picard2 as picard
-from bfx import sambamba
-from bfx import samtools
-from bfx import tools
-from bfx import ucsc
-from core.config import global_conf, _raise, SanitycheckError
-from core.job import Job, concat_jobs
-from pipelines import dnaseq
+from ...bfx import bedtools
+from ...bfx import bismark
+from ...bfx import bissnp
+from ...bfx import bvatools
+from ...bfx import fgbio
+from ...bfx import gatk
+from ...bfx import igvtools
+from ...bfx import metrics
+from ...bfx import picard2 as picard
+from ...bfx import sambamba
+from ...bfx import samtools
+from ...bfx import tools
+from ...bfx import ucsc
+from ...core.config import global_conf, _raise, SanitycheckError
+from ...core.job import Job, concat_jobs
+from .. import dnaseq
 
 log = logging.getLogger(__name__)
 

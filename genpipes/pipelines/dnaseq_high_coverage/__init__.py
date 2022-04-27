@@ -26,27 +26,23 @@ import re
 import subprocess
 import sys
 
-# Append mugqic_pipelines directory to Python library path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))))
 
 # MUGQIC Modules
-from core.config import global_conf
-from core.job import Job, concat_jobs, pipe_jobs
-import utils.utils
+from ...core.config import global_conf
+from ...core.job import Job, concat_jobs, pipe_jobs
 
-from bfx import bvatools
-from bfx import gq_seq_utils
-from bfx import gatk
-from bfx import igvtools
-from bfx import picard2
-from bfx import samtools
-from bfx import tools
-from bfx import varscan
-from bfx import htslib
-from bfx import vt
-from bfx import snpeff
-from bfx import gemini
-from pipelines import dnaseq
+from ...bfx import bvatools
+from ...bfx import gatk
+from ...bfx import igvtools
+from ...bfx import picard2
+from ...bfx import samtools
+from ...bfx import tools
+from ...bfx import varscan
+from ...bfx import htslib
+from ...bfx import vt
+from ...bfx import snpeff
+from ...bfx import gemini
+from .. import dnaseq
 
 log = logging.getLogger(__name__)
 

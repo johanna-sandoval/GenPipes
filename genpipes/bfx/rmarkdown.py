@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 # This is general to all jobs 
 def render(job_input, job_name, input_rmarkdown_file, samples, render_output_dir, module_section="DEFAULT", prerun_r=""):

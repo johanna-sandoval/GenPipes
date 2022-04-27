@@ -33,23 +33,21 @@ import collections
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))))
 
 # MUGQIC Modules
-from core.config import global_conf, _raise, SanitycheckError
-from core.job import Job, concat_jobs
-from core.pipeline import Pipeline
-from bfx.design import parse_design_file
-from bfx.readset import parse_illumina_readset_file, parse_nanopore_readset_file
-from bfx.sample_tumor_pairs import *
+from ..core.config import global_conf, _raise, SanitycheckError
+from ..core.job import Job, concat_jobs
+from ..core.pipeline import Pipeline
+from ..bfx.design import parse_design_file
+from ..bfx.readset import parse_illumina_readset_file, parse_nanopore_readset_file
+from ..bfx.sample_tumor_pairs import *
 
-from bfx import metrics
-from bfx import bvatools
-from bfx import verify_bam_id
-from bfx import picard
-from bfx import trimmomatic
-from bfx import variantBam
-from bfx import samtools
-from bfx import rmarkdown
-from bfx import jsonator
-from bfx import bash_cmd as bash
+from ..bfx import bvatools
+from ..bfx import verify_bam_id
+from ..bfx import picard
+from ..bfx import trimmomatic
+from ..bfx import variantBam
+from ..bfx import samtools
+from ..bfx import rmarkdown
+from ..bfx import bash_cmd as bash
 
 log = logging.getLogger(__name__)
 

@@ -23,18 +23,18 @@ import logging
 import os
 
 # MUGQIC Modules
-from bfx import blast
-from bfx import differential_expression
-from bfx import exonerate
-from bfx import gq_seq_utils
-from bfx import rmarkdown
-from bfx import seq2fun
-from bfx import tools
-from bfx import trinity
-from bfx import trinotate
-from core.config import global_conf, _raise, SanitycheckError
-from core.job import Job, concat_jobs
-from pipelines import rnaseq
+from ...bfx import blast
+from ...bfx import differential_expression
+from ...bfx import exonerate
+from ...bfx import gq_seq_utils
+from ...bfx import rmarkdown
+from ...bfx import seq2fun
+from ...bfx import tools
+from ...bfx import trinity
+from ...bfx import trinotate
+from ...core.config import global_conf, _raise, SanitycheckError
+from ...core.job import Job, concat_jobs
+from .. import rnaseq
 
 log = logging.getLogger(__name__)
 

@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def bedGraphToBigWig(input_bed_graph, output_wiggle, header=True, ini_section='ucsc'):
 

@@ -22,8 +22,8 @@ import logging
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import * 
+from ..core.config import *
+from ..core.job import * 
 
 def bamqc(input_bam, output_directory, output, options, ini_section='qualimap'):
 

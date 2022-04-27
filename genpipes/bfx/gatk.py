@@ -22,9 +22,9 @@ import re
 import os
 
 # MUGQIC Modules
-import core
-from core.job import Job
-from core.config import global_conf
+from genpipes import core
+from ..core.job import Job
+from ..core.config import global_conf
 from . import gatk4
 from . import picard
 from . import picard2

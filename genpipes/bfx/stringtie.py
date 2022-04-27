@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def stringtie(input_bam, output_directory, gtf=None, abund=False):
     ## Get param from config file

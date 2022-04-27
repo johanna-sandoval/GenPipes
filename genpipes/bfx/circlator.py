@@ -20,8 +20,8 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def circularize(fasta_consensus, corrected_fastq, circlator_output):
 

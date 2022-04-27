@@ -23,16 +23,16 @@ import os
 import re
 
 # MUGQIC Modules
-from bfx import bash_cmd as bash
-from bfx import gatk4
-from bfx import minimap2
-from bfx import pycoqc
-from bfx import sambamba
-from bfx import svim
-from bfx import tools
-from core.config import global_conf, SanitycheckError, _raise
-from core.job import concat_jobs, pipe_jobs
-from pipelines import common
+from ...bfx import bash_cmd as bash
+from ...bfx import gatk4
+from ...bfx import minimap2
+from ...bfx import pycoqc
+from ...bfx import sambamba
+from ...bfx import svim
+from ...bfx import tools
+from ...core.config import global_conf, SanitycheckError, _raise
+from ...core.job import concat_jobs, pipe_jobs
+from .. import common
 
 log = logging.getLogger(__name__)
 

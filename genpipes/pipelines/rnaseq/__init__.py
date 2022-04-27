@@ -23,26 +23,26 @@ import os
 import re
 
 # MUGQIC Modules
-from bfx import ballgown
-from bfx import bedtools
-from bfx import bvatools
-from bfx import bwa
-from bfx import cufflinks
-from bfx import differential_expression
-from bfx import gq_seq_utils
-from bfx import htseq
-from bfx import metrics
-from bfx import picard
-from bfx import rmarkdown
-from bfx import samtools
-from bfx import star
-from bfx import stringtie
-from bfx import tools
-from bfx import ucsc
-from core.config import global_conf, _raise, SanitycheckError
-from core.job import Job, concat_jobs, pipe_jobs
-from pipelines import common
-import utils
+from ...bfx import ballgown
+from ...bfx import bedtools
+from ...bfx import bvatools
+from ...bfx import bwa
+from ...bfx import cufflinks
+from ...bfx import differential_expression
+from ...bfx import gq_seq_utils
+from ...bfx import htseq
+from ...bfx import metrics
+from ...bfx import picard
+from ...bfx import rmarkdown
+from ...bfx import samtools
+from ...bfx import star
+from ...bfx import stringtie
+from ...bfx import tools
+from ...bfx import ucsc
+from ...core.config import global_conf, _raise, SanitycheckError
+from ...core.job import Job, concat_jobs, pipe_jobs
+from .. import common
+from ... import utils
 
 log = logging.getLogger(__name__)
 
@@ -938,13 +938,13 @@ END
 
         job = concat_jobs([
             Job(command="mkdir -p " + output_directory),
-            utils.utils.fpkm_correlation_matrix(cuffnorm_transcript, output_transcript)
+            utils.fpkm_correlation_matrix(cuffnorm_transcript, output_transcript)
         ])
         job.name="fpkm_correlation_matrix_transcript"
         job.samples = self.samples
         jobs = jobs + [job]
 
-        job = utils.utils.fpkm_correlation_matrix(cuffnorm_gene, output_gene)
+        job = utils.fpkm_correlation_matrix(cuffnorm_gene, output_gene)
         job.name="fpkm_correlation_matrix_gene"
         job.samples = self.samples
         jobs = jobs + [job]

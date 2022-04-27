@@ -40,7 +40,7 @@ from .job import Job
 from .scheduler import create_scheduler
 from .step import Step
 
-from bfx import jsonator
+from ..bfx import jsonator
 
 log = logging.getLogger(__name__)
 

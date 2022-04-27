@@ -20,8 +20,8 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def intra_chrom_matrix_plot(fileNameRN, sample_name, chrom, res, output_dir, fileNamePlot, newFileNamePlot):
     return Job(

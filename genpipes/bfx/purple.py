@@ -22,8 +22,8 @@ import logging
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def run(amber, cobalt, normal_name, tumor_name, output_dir, somatic_snv):
     amber_input = os.path.join(amber, tumor_name + ".amber.baf.pcf")

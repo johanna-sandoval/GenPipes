@@ -20,8 +20,8 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def compute_tdf(input, output):
     return Job(

@@ -22,8 +22,8 @@ import logging
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import * 
+from ..core.config import *
+from ..core.job import *
 
 def fastqc(input1, input2, output_directory, output, adapter_file):
 

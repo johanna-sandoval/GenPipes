@@ -21,7 +21,7 @@
 import os
 
 # MUGQIC Modules
-from core.job import Job
+from ..core.job import Job
 
 def mkdir(
     folder,

@@ -20,9 +20,9 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
-from bfx import blast
+from ..core.config import *
+from ..core.job import *
+from . import blast
 
 # Identifies candidate coding regions within transcript sequences using [Transdecoder](http://transdecoder.github.io/).
 def transdecoder(trinity_fasta, transdecoder_directory, transdecoder_subdirectory):

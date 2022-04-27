@@ -20,7 +20,7 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.job import *
+from ..core.job import *
 
 
 def makeDesignFiles (rmapfile, baitmapfile, file_prefix, design_dir = ".", other_options=""):

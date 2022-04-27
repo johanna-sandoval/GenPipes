@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 
 def nanopolish_ont(read_fastq_dir, run_name, sample_name, read_fast5_dir, seq_summary, output_dir, ini_section="artic_nanopolish"):

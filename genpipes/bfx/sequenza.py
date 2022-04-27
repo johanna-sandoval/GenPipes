@@ -18,8 +18,8 @@
 ################################################################################
 
 
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 #Assuming that the module file has already been written and the scripts have been added to path
 

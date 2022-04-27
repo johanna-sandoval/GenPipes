@@ -21,8 +21,8 @@
 import logging
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 log = logging.getLogger(__name__)
 

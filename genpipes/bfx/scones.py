@@ -17,8 +17,8 @@
 # along with MUGQIC Pipelines.  If not, see <http://www.gnu.org/licenses/>.
 ################################################################################
 
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def scones_pair(bined_file, output_basename, window):
     

@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def htseq_count(input, gtf, output, options="", stranded="no",input_type="sam"):
     return Job(

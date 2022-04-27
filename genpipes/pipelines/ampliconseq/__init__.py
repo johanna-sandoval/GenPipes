@@ -27,16 +27,16 @@ import sys
 from os.path import basename
 
 # MUGQIC Modules
-from core.config import global_conf, _raise, SanitycheckError
-from core.job import Job, concat_jobs
-from pipelines import common
-from bfx import tools
-from bfx import dada2
-from bfx import flash
-from bfx import qiime
-from bfx import vsearch
-from bfx import krona
-from bfx import trimmomatic
+from ...core.config import global_conf, _raise, SanitycheckError
+from ...core.job import Job, concat_jobs
+from .. import common
+from ...bfx import tools
+from ...bfx import dada2
+from ...bfx import flash
+from ...bfx import qiime
+from ...bfx import vsearch
+from ...bfx import krona
+from ...bfx import trimmomatic
 
 log = logging.getLogger(__name__)
 

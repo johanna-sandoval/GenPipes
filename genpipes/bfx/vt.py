@@ -20,8 +20,8 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def decompose_and_normalize_mnps(inputs, vt_output=None):
     if not isinstance(inputs, list):

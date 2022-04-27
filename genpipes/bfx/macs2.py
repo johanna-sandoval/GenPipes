@@ -20,8 +20,8 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def callpeak (options, genome_size, treatment_files, control_files, output_prefix_name, output, ini_section='macs2_callpeak'):
 

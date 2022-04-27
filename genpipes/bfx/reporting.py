@@ -21,9 +21,9 @@
 import os
 
 # MUGQIC Modules
-from core.config import global_conf
-from core.job import Job
-from utils import utils
+from ..core.config import global_conf
+from ..core.job import Job
+from ..utils import utils
 
 def formatvcf(input_vcf, output_vcf):
     return Job(

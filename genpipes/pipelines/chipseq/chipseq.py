@@ -29,10 +29,10 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))))
 
 # MUGQIC Modules
-from core.config import global_conf, _raise, SanitycheckError
-from core.job import Job, concat_jobs, pipe_jobs
-import utils
-from pipelines.chipseq import ChipSeq
+from ...core.config import global_conf, _raise, SanitycheckError
+from ...core.job import Job, concat_jobs, pipe_jobs
+from ... import utils
+from ..chipseq import ChipSeq
 
 log = logging.getLogger(__name__)
 

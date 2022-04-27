@@ -22,7 +22,7 @@ import re
 import json
 
 # MUGQIC Modules
-from core.config import global_conf
+from ..core.config import global_conf
 
 # Start creating the json dump for the passed sample
 def create(pipeline, sample):

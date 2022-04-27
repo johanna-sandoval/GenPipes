@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 
 def pycoqc(readset_name, input_summary, output_directory, input_barcode=None, input_bam=None):

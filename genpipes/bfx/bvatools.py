@@ -20,8 +20,8 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def resolve_readset_coverage_bed(readset):
     coverage_target = global_conf.get('bvatools_depth_of_coverage', 'coverage_targets', required=False)

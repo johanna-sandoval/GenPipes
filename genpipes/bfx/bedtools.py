@@ -21,10 +21,10 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
-from bfx import ucsc
+from . import ucsc
 
 def graph(input_bam, output_bed_graph, library_type="PAIRED_END"):
 

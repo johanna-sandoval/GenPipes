@@ -18,8 +18,8 @@
 ################################################################################
 
 
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def call_sv(input_normal, input_tumor, output):
     if input_tumor is not None:

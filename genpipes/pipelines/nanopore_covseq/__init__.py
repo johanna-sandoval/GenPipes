@@ -25,23 +25,23 @@ import os
 import re
 
 # MUGQIC Modules
-from bfx import artic
-from bfx import bash_cmd as bash
-from bfx import covseq_tools
-from bfx import guppy
-from bfx import htslib
-from bfx import kraken2
-from bfx import minimap2
-from bfx import ncovtools
-from bfx import pycoqc
-from bfx import quast
-from bfx import sambamba
-from bfx import samtools
-from bfx import snpeff
-from bfx import wub
-from core.config import global_conf, SanitycheckError, _raise
-from core.job import Job, concat_jobs, pipe_jobs
-from pipelines import common
+from ...bfx import artic
+from ...bfx import bash_cmd as bash
+from ...bfx import covseq_tools
+from ...bfx import guppy
+from ...bfx import htslib
+from ...bfx import kraken2
+from ...bfx import minimap2
+from ...bfx import ncovtools
+from ...bfx import pycoqc
+from ...bfx import quast
+from ...bfx import sambamba
+from ...bfx import samtools
+from ...bfx import snpeff
+from ...bfx import wub
+from ...core.config import global_conf, SanitycheckError, _raise
+from ...core.job import Job, concat_jobs, pipe_jobs
+from .. import common
 
 log = logging.getLogger(__name__)
 

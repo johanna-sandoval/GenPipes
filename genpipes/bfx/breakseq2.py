@@ -17,8 +17,8 @@
 # along with MUGQIC Pipelines.  If not, see <http://www.gnu.org/licenses/>.
 ################################################################################
 
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def run(input, sample_name, output_dir):
 	output = os.path.join(output_dir, "breakseq.vcf.gz")

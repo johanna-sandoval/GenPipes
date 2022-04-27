@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def run(input, output_dir):
 	output = os.path.join(output_dir, "output_corr_matrix.txt")

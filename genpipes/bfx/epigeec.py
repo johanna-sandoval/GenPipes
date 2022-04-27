@@ -19,8 +19,8 @@
 
 import os
 
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def tohdf5(output_dir, signal_file):
     signal_file_basename = os.path.basename(signal_file)+".hdf5"

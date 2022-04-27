@@ -25,25 +25,25 @@ import re
 import sys
 
 # MUGQIC Modules
-from bfx import bash_cmd as bash
-from core.config import global_conf, SanitycheckError, _raise
-from core.job import Job, concat_jobs
-from pipelines import common
-from bfx import samtools
-from bfx import hicup
-from bfx import hicplotter
-from bfx import homer
-from bfx import multiqc
-from bfx import genome
-from bfx import bedtools
-from bfx import chicago
-from bfx import bedops
-from bfx import tools
-from bfx import topdom
-from bfx import robustad
-from bfx import hic
-from bfx import hicrep
-from bfx import quasar_qc
+from ...bfx import bash_cmd as bash
+from ...core.config import global_conf, SanitycheckError, _raise
+from ...core.job import Job, concat_jobs
+from .. import common
+from ...bfx import samtools
+from ...bfx import hicup
+from ...bfx import hicplotter
+from ...bfx import homer
+from ...bfx import multiqc
+from ...bfx import genome
+from ...bfx import bedtools
+from ...bfx import chicago
+from ...bfx import bedops
+from ...bfx import tools
+from ...bfx import topdom
+from ...bfx import robustad
+from ...bfx import hic
+from ...bfx import hicrep
+from ...bfx import quasar_qc
 
 log = logging.getLogger(__name__)
 

@@ -20,8 +20,8 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def create_hicup_conf(name, fastq1, fastq2, sample_output_dir, genome_digest):
     # create HiCUP configuration file:

@@ -3,9 +3,9 @@ import argparse
 import os
 import sys
 
-import utils
+from ... import utils
 
-from pipelines.ampliconseq import AmpliconSeq
+from ..ampliconseq import AmpliconSeq
 
 # Append mugqic_pipelines directory to Python library path
 # that is the old crappy setup!

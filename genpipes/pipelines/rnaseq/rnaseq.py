@@ -29,8 +29,8 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))))
 
 # MUGQIC Modules
-import utils
-from pipelines.rnaseq import RnaSeq
+from ... import utils
+from ..rnaseq import RnaSeq
 
 log = logging.getLogger(__name__)
 

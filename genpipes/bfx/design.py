@@ -24,7 +24,7 @@ import os
 import re
 
 # MUGQIC Modules
-from core.config import _raise, SanitycheckError
+from ..core.config import _raise, SanitycheckError
 from .sample import *
 
 log = logging.getLogger(__name__)

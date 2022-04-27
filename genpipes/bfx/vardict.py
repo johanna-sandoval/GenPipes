@@ -20,8 +20,8 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def paired(input_normal, input_tumor, tumor_name, output=None, region=[]):
     return Job(

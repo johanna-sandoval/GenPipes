@@ -17,8 +17,8 @@
 # along with MUGQIC Pipelines.  If not, see <http://www.gnu.org/licenses/>.
 ################################################################################
 
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 #Assuming that the module file has already been written and the scripts have been added to path
 

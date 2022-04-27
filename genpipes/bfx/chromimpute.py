@@ -22,8 +22,8 @@
 import os
 # MUGQIC Modules
 
-from core.job import *
-from core.config import *
+from ..core.job import *
+from ..core.config import *
 
 
 def modify_inputinfofile(input_file, sample, histone,  output_inputinfo_file):

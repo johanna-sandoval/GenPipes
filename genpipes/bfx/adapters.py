@@ -22,8 +22,8 @@ import logging
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def create(readset, output, fastqc=False):
     if fastqc == True:

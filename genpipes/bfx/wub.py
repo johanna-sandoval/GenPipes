@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 
 def bam_alignment_qc(bam_file, pickle, ini_section="wub_metrics"):

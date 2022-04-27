@@ -21,7 +21,7 @@
 import os
 import re
 
-from core.job import *
+from ..core.job import *
 
 def bigWigToBedGraph(input_bigWigFile, output_bedgraph):
     # Remove the chr_ prefix to convert on whole genome or change chrom number to convert only for specified chromosome

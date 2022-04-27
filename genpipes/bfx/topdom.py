@@ -20,8 +20,8 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def create_input(input_matrix, tmp_matrix, output_matrix, output_script, res):
     ## make TopDom R script:

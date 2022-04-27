@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def exploratory_analysis_rnaseq(htseq_count_file, cuffnorm_dir, genes_file, output_dir):
 

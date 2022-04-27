@@ -20,8 +20,8 @@
 # Python Standard Modules
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def ray(pathOut, pair1=[], pair2=[], single=[], options=""):
     if (len(pair1)!=len(pair2)):

@@ -30,7 +30,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 # MUGQIC Modules
 import utils.utils
-from pipelines.nanopore_covseq import NanoporeCoVSeq
+from ..nanopore_covseq import NanoporeCoVSeq
 
 log = logging.getLogger(__name__)
 

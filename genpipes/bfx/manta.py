@@ -19,8 +19,8 @@
 
 import re
 
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def manta_config(input_normal, input_tumor, output_dir, callRegion=None):
     output = [os.path.join(output_dir, "results", "variants", "diploidSV.vcf.gz"), os.path.join(output_dir, "results", "variants", "candidateSmallIndels.vcf.gz")]

@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def check(input_vcf, output_log, chr):
     output_dep = output_log + ".snp.strand.exclude"

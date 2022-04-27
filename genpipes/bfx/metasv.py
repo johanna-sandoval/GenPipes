@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 def ensemble(lumpy, manta, cnvkit, wham, delly, gatk, bam, sample_name, workdir, outdir, isize_mean, isize_sd, output_vcf, breakseq=None):
     return Job(

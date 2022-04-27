@@ -21,8 +21,8 @@
 import os
 
 # MUGQIC Modules
-from core.config import *
-from core.job import *
+from ..core.config import *
+from ..core.job import *
 
 #This function is used to render R file and create a html output using knitr and spin
 #This is a new feature introduced to Genpipes in 2021

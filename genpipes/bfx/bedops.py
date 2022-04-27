@@ -21,7 +21,7 @@
 import re
 
 # MUGQIC Modules
-from core.job import *
+from ..core.job import *
 
 
 def sort_bed(input_bed, output_file, other_options=""):

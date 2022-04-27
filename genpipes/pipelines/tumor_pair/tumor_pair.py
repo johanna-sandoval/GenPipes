@@ -31,61 +31,61 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))))
 
 # MUGQIC Modules
-from core.config import global_conf
-from core.job import Job, concat_jobs, pipe_jobs
-from bfx.sample_tumor_pairs import parse_tumor_pair_file
-from bfx.sequence_dictionary import split_by_size, parse_sequence_dictionary_file
+from ...core.config import global_conf
+from ...core.job import Job, concat_jobs, pipe_jobs
+from ...bfx.sample_tumor_pairs import parse_tumor_pair_file
+from ...bfx.sequence_dictionary import split_by_size, parse_sequence_dictionary_file
 import utils.utils
 
 import gzip
 from sys import stderr
-from pipelines.dnaseq import dnaseq
+from ..dnaseq import dnaseq
 
 # utilizes
-from bfx import sambamba
-from bfx import bcftools
-from bfx import tools
-from bfx import metric_tools
-from bfx import bvatools
-from bfx import vt
-from bfx import snpeff
-from bfx import vawk
-from bfx import deliverables
-from bfx import bash_cmd as bash
+from ...bfx import sambamba
+from ...bfx import bcftools
+from ...bfx import tools
+from ...bfx import metric_tools
+from ...bfx import bvatools
+from ...bfx import vt
+from ...bfx import snpeff
+from ...bfx import vawk
+from ...bfx import deliverables
+from ...bfx import bash_cmd as bash
 
 # metrics
-from bfx import conpair
-from bfx import qualimap
-from bfx import adapters
-from bfx import fastqc
-from bfx import multiqc
+from ...bfx import conpair
+from ...bfx import qualimap
+from ...bfx import adapters
+from ...bfx import fastqc
+from ...bfx import multiqc
 
 # variants
-from bfx import htslib
-from bfx import samtools
-from bfx import varscan
-from bfx import gatk
-from bfx import gatk4
-from bfx import vardict
-from bfx import strelka2
-from bfx import bcbio_variation_recall
-from bfx import gemini
+from ...bfx import htslib
+from ...bfx import samtools
+from ...bfx import varscan
+from ...bfx import gatk
+from ...bfx import gatk4
+from ...bfx import vardict
+from ...bfx import strelka2
+from ...bfx import bcbio_variation_recall
+from ...bfx import gemini
 
 # sv
-from bfx import delly
-from bfx import manta
-from bfx import lumpy
-from bfx import svtyper
-from bfx import wham
-from bfx import metasv
-from bfx import cnvkit
-from bfx import scones
-from bfx import sequenza
-from bfx import amber
-from bfx import cobalt
-from bfx import purple
-from bfx import svaba
-from bfx import annotations
+from ...bfx import delly
+from ...bfx import manta
+from ...bfx import lumpy
+from ...bfx import svtyper
+from ...bfx import wham
+from ...bfx import metasv
+from ...bfx import cnvkit
+from ...bfx import scones
+from ...bfx import sequenza
+from ...bfx import amber
+from ...bfx import cobalt
+from ...bfx import purple
+from ...bfx import svaba
+from ...bfx import annotations
 
 log = logging.getLogger(__name__)
 
