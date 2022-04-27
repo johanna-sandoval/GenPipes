@@ -896,6 +896,13 @@ class RunProcessing(common.MUGQICPipeline):
             output_dir = os.path.join(self.output_dir, "Unaligned." + lane)
             casava_sample_sheet = os.path.join(self.output_dir, "casavasheet." + lane + ".indexed.csv")
 
+            fastq_outputs.extend(
+                [
+                    os.path.join(output_dir, "Reports/html", self.flowcell_id, "all/all/all/lane.html"),
+                    os.path.join(output_dir, "Stats/Stats.json")
+                ]
+            )
+
             if self.umi:
                 output_dir_noindex = os.path.join(self.output_dir, "Unaligned." + lane + ".noindex")
                 casava_sample_sheet_noindex = os.path.join(self.output_dir, "casavasheet." + lane + ".noindex.csv")
@@ -926,7 +933,8 @@ class RunProcessing(common.MUGQICPipeline):
                             ini_section='fastq_illumina'
                     )],
                     name="fastq_illumina." + self.run_id + "." + lane,
-                    samples=self.samples[lane]
+                    samples=self.samples[lane],
+                    report_files=[os.path.join(output_dir, "Stats/Stats.json")]
                 ))
 
             else:
@@ -945,7 +953,11 @@ class RunProcessing(common.MUGQICPipeline):
                 )
                 bcl2fastq_job.name = "fastq_illumina." + self.run_id + "." + lane
                 bcl2fastq_job.samples = self.samples[lane]
+                bcl2fastq_job.report_files = [os.path.join(output_dir, "Stats/Stats.json")]
                 lane_jobs.append(bcl2fastq_job)
+
+            for readset in self.readsets[lane]:
+                readset.report_files['fastq'] = [os.path.join(output_dir, "Stats/Stats.json")]
 
             if final_fastq_jobs:
                 lane_jobs.extend(final_fastq_jobs)
