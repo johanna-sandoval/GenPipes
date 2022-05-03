@@ -2387,8 +2387,6 @@ class RunProcessing(common.MUGQICPipeline):
         for lane in self.lanes:
             lane_jobs = []
 
-            report_dir = os.path.join(self.output_dir, "report")
-
             self.generate_lane_json_report_file(lane)
 
             ## Metrics to Json
@@ -2628,8 +2626,8 @@ class RunProcessing(common.MUGQICPipeline):
             "step_name" : step_name,
             "jobs" : [{
                 "job_name" : job.name,
-                "input_files" : [os.path.relpath(input_file, os.path.join(self.output_dir, "report")) for input_file in job.input_files],
-                "output_files" : [os.path.relpath(output_file, os.path.join(self.output_dir, "report")) for output_file in job.output_files],
+                "input_files" : [os.path.relpath(input_file, self.report_dir[lane]) for input_file in job.input_files],
+                "output_files" : [os.path.relpath(output_file, self.report_dir[lane]) for output_file in job.output_files],
                 "command" : job.command,
                 "modules" : job.modules
             } for job in jobs]
@@ -3343,14 +3341,14 @@ class RunProcessing(common.MUGQICPipeline):
         for step in self.step_list:
             if step.name in ['basecall', 'fastq', 'index']:
                 step_report_files = list(set([report_file for job in step.jobs for report_file in job.report_files for sample in job.samples for readset in sample.readsets if job.report_files and readset.lane == lane]))
-                self.report_hash[lane]["multiqc_inputs"].extend([os.path.relpath(path, os.path.join(self.output_dir, "report")) for path in step_report_files])
+                self.report_hash[lane]["multiqc_inputs"].extend([os.path.relpath(path, self.report_dir[lane]) for path in step_report_files])
             else:
                 for readset in self.readsets[lane]:
                     readset_name = readset.name
                     step_report_files = list(set([report_file for job in step.jobs for sample in job.samples for sreadset in sample.readsets for report_file in job.report_files if job.report_files and sreadset.lane == lane and sreadset.name == readset.name]))
-                    self.report_hash[lane]["multiqc_inputs"].extend([os.path.relpath(path, os.path.join(self.output_dir, "report")) for path in step_report_files])
+                    self.report_hash[lane]["multiqc_inputs"].extend([os.path.relpath(path, self.report_dir[lane]) for path in step_report_files])
 
-        report_dir = os.path.join(self.output_dir, "report")
+        
         if not os.path.exists(os.path.dirname(self.run_validation_report_json[lane])):
              os.makedirs(os.path.dirname(self.run_validation_report_json[lane]))
         with open(self.run_validation_report_json[lane], 'w') as out_json:
