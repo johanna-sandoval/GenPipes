@@ -45,7 +45,9 @@ def add_default_command(parser):
 
 
 
-def make_parser(argv):
+def make_parser(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
 
     container_wrapper_argparse("genpipes", argv)
 
