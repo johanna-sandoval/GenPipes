@@ -405,6 +405,22 @@ class RunProcessing(common.MUGQICPipeline):
         return self._index2cycles
 
     @property
+    def maxindex1cycles(self):
+        if not hasattr(self, "_maxindex1cycles"):
+            self._maxindex1cycles = {}
+            for lane in self.lanes:
+                self._maxindex1cycles[lane] = min(int(self.index1cycles[lane] ), max([len(index['INDEX1']) for readset in self.readsets[lane] for index in readset.index]))
+        return self._maxindex1cycles
+
+    @property
+    def maxindex2cycles(self):
+        if not hasattr(self, "_maxindex2cycles"):
+            self._maxindex2cycles = {}
+            for lane in self.lanes:
+                self._maxindex2cycles[lane] = min(int(self.index2cycles[lane] ), max([len(index['INDEX2']) for readset in self.readsets[lane] for index in readset.index]))
+        return self._maxindex2cycles
+
+    @property
     def umi(self):
         if not hasattr(self, "_umi"):
             self._umi = False
@@ -944,7 +960,7 @@ class RunProcessing(common.MUGQICPipeline):
                     output_dir,
                     casava_sample_sheet,
                     self.run_dir,
-                    self.lane_number,
+                    lane,
                     self.bcl2fastq_extra_option,
                     demultiplex=True,
                     mismatches=self.number_of_mismatches,
@@ -970,7 +986,7 @@ class RunProcessing(common.MUGQICPipeline):
                 notification_command_start = notification_command_start.format(
                     output_dir=self.output_dir,
 #                    number_of_mismatches=self.number_of_mismatches,
-                    lane_number=self.lane_number,
+                    lane_number=lane,
 #                    mask=self.mask[lane],
 #                    technology=config.param('fastq', 'technology'),
 #                    run_id=self.run_id
@@ -989,7 +1005,7 @@ class RunProcessing(common.MUGQICPipeline):
             if notification_command_end:
                 notification_command_end = notification_command_end.format(
                     output_dir=self.output_dir,
-                    lane_number=self.lane_number,
+                    lane_number=lane,
 #                    technology=config.param('fastq', 'technology'),
 #                    run_id=self.run_id
                 )
@@ -2732,7 +2748,7 @@ class RunProcessing(common.MUGQICPipeline):
 
     def get_sequencer_index_length(self):
         """
-        Returns the total number of index cycles of the run.
+        Parse the barcode definition file to look for the longuest i5 barcode
         """
         return sum(index_read.nb_cycles for index_read in [read for read in self.read_infos if read.is_index])
 
@@ -3090,21 +3106,19 @@ class RunProcessing(common.MUGQICPipeline):
         # add [Data] line before the actual headers
         section_header_dict = { "FCID": "[Data]" }
         writer.writerow(section_header_dict)
-
         writer.writeheader()
 
         mask = self.mask[lane]
 
-        overmask = ""
-        overindex1 = None
-        overindex2 = None
-
-        dualindex_demultiplexing = False    # This is not the sequencing demultiplexing flag, but really the index demultiplexing flag
-        self._umi = False
-
         # barcode validation
         if re.search("I", mask) and not self.args.allow_barcode_collision:
             self.validate_barcodes(lane)
+
+        overmask = ""
+        overindex1 = None
+        overindex2 = None
+        # dualindex_demultiplexing = False
+        self._umi = False        
 
         # IDT - UMI9 in index2
         if re.search(",I17", mask):
@@ -3113,22 +3127,54 @@ class RunProcessing(common.MUGQICPipeline):
             overindex1=8
             overindex2=8
 
-        # HaloPlex - UMI8 in index2 alone
-        if sum(1 for readset in [readset for readset in self.readsets[lane] if re.search("HaloPlex", readset.protocol)]) > 0:
-            if "DUALINDEX" in set([readset.index_type for readset in self.readsets[lane]]) :
-                _raise(SanitycheckError("HaloPlex libraries cannot be mixed with DUAL INDEX libraries"))
-            overmask=re.sub(",I8,I10,", ",I8,Y10,", mask)
-            overindex1=8
-            overindex2=0
-            self._bcl2fastq_extra_option="--mask-short-adapter-reads 10"
+        maxindex1cycles = min(int(self.index1cycles[lane] ), max([len(index['INDEX1']) for readset in self.readsets[lane] for index in readset.index]))
+        maxindex2cycles = min(int(self.index2cycles[lane] ), max([len(index['INDEX2']) for readset in self.readsets[lane] for index in readset.index]))
+        pad1 = "n*" if maxindex1cycles != self.index1cycles[lane] else ""
+        pad2 = "n*" if maxindex2cycles != self.index2cycles[lane] else ""
+
+        split_mask = mask.split(",")
 
         # If SINGLEINDEX only
-        if "DUALINDEX" not in set([readset.index_type for readset in self.readsets[lane]]):
-            if re.search("I", mask.split(",")[2]):
-                split_mask = mask.split(",") if overmask == "" else overmask.split(",")
-                overmask=','.join([split_mask[0], split_mask[1], "n*", split_mask[3]])
-                overindex1=8
+        if "DUALINDEX" not in set([readset.index_type for readset in self.readsets[lane]]):            
+            if re.search("I", mask.split(",")[1]) and len([readset for readset in self.readsets[lane] if readset.library_type in ["tenX_sc_RNA_v1", "TELL-Seq"]]):
+                # R2 is I1
+                overmask=','.join([split_mask[0], 'Y'+self.index1cycles[lane], 'I'+str(maxindex2cycles)+pad2, split_mask[3]])
+                overindex1=0
+                overindex2=maxindex2cycles
+                self._bcl2fastq_extra_option="--mask-short-adapter-reads 8"
+            elif re.search("I", mask.split(",")[2]):
+                # R2 is I2
+                overmask=','.join([split_mask[0], 'I'+str(maxindex1cycles)+pad1, 'Y'+self.index2cycles[lane], split_mask[3]])
+                overindex1=maxindex1cycles
                 overindex2=0
+                self._bcl2fastq_extra_option="--mask-short-adapter-reads 8"
+            else:
+                # read 3 is not index
+                overmask=','.join([split_mask[0], 'I'+str(maxindex1cycles)+pad1, split_mask[2]])
+                overindex1=maxindex1cycles
+                overindex2=0
+
+        # If DUALINDEX or MIX
+        else:
+            if re.search("I", mask.split(",")[2]):
+                # read 3 is sequenced as index
+                overmask=','.join([split_mask[0], 'I'+str(maxindex1cycles)+pad1, 'I'+str(maxindex2cycles)+pad2, split_mask[3]])
+                overindex1=maxindex1cycles
+                overindex2=maxindex2cycles
+            else:
+                # read 3 is not index
+                overmask=','.join([split_mask[0], 'I'+str(maxindex1cycles)+pad1, split_mask[2]])
+                overindex1=maxindex1cycles
+                overindex2=0
+
+        # # HaloPlex - UMI8 in index2 alone
+        # if sum(1 for readset in [readset for readset in self.readsets[lane] if re.search("HaloPlex", readset.protocol)]) > 0:
+        #     if "DUALINDEX" in set([readset.index_type for readset in self.readsets[lane]]) :
+        #         _raise(SanitycheckError("HaloPlex libraries cannot be mixed with DUAL INDEX libraries"))
+        #     overmask=re.sub(",I8,I10,", ",I8,Y10,", mask)
+        #     overindex1=8
+        #     overindex2=0
+        #     self._bcl2fastq_extra_option="--mask-short-adapter-reads 10"
 
         final_mask = mask if overmask == "" else overmask
         final_index1 = self.index1cycles[lane] if overindex1 is None else overindex1
@@ -3138,16 +3184,14 @@ class RunProcessing(common.MUGQICPipeline):
         self._index1cycles[lane] = config.param('fastq_illumina', 'overindex1') if config.param('fastq_illumina', 'overindex1', required=False, param_type='int') else final_index1
         self._index2cycles[lane] = config.param('fastq_illumina', 'overindex2') if config.param('fastq_illumina', 'overindex2', required=False, param_type='int') else final_index2
 
-        # If the second index exists
-        if self.index2cycles[lane] != 0:
-            dualindex_demultiplexing = True
+        # # If the second index exists
+        # if self.index2cycles[lane] != 0:
+        #     dualindex_demultiplexing = True
 
-        # In case of HaloPlex-like masks, R2 is actually I2 (while R3 is R2),
-        # Proceed to dualindex demultiplexing
-        if ''.join(i for i in self.mask[lane] if not i.isdigit()) == "Y,I,Y,Y":
-            dualindex_demultiplexing = True
-        output_dir = os.path.join(self.output_dir, "Unaligned." + lane)
-        casava_sample_sheet = os.path.join(self.output_dir, "casavasheet." + lane + ".indexed.csv")
+        # # In case of HaloPlex-like masks, R2 is actually I2 (while R3 is R2),
+        # # Proceed to dualindex demultiplexing
+        # if ''.join(i for i in self.mask[lane] if not i.isdigit()) == "Y,I,Y,Y":
+        #     dualindex_demultiplexing = True
 
         count = 0
         index_per_readset = {}
@@ -3160,7 +3204,6 @@ class RunProcessing(common.MUGQICPipeline):
                 # Barcode sequence should only match with the barcode cycles defined in the mask
                 # so we adjust the length of the index sequences accordingly for the "Sample_Barcode" field
                 if int(self.index2cycles[lane]):
-#"DUALINDEX" in set([readset.index_type for readset in self.readsets[lane]]):
                     sample_barcode = readset_index['INDEX1'][0:index_lengths[0]] + readset_index['INDEX2'][0:index_lengths[1]]
                 else:
                     sample_barcode = readset_index['INDEX1'][0:index_lengths[0]]
@@ -3171,7 +3214,7 @@ class RunProcessing(common.MUGQICPipeline):
 
                 readset_index['BARCODE_SEQUENCE'] = sample_barcode
                 readset.indexes[idx] = readset_index
-                log.error(readset_index['INDEX1'] + ' sdadsda ' + readset_index['INDEX2'])
+                log.error(readset_index['INDEX1'][0:self.index1cycles[lane]] + ' sdadsda ' + readset_index['INDEX2'][0:self.index2cycles[lane]])
 
                 csv_dict = {
                     "FCID": readset.flow_cell,
@@ -3179,8 +3222,8 @@ class RunProcessing(common.MUGQICPipeline):
                     "Sample_ID": "Sample_" + readset_index['SAMPLESHEET_NAME'],
                     "Sample_Name": readset_index['SAMPLESHEET_NAME'],
                     "SampleRef": "",
-                    "Index": readset_index['INDEX1'],
-                    "Index2": readset_index['INDEX2'],
+                    "Index": readset_index['INDEX1'][0:self.index1cycles[lane]],
+                    "Index2": readset_index['INDEX2'][0:self.index2cycles[lane]],
                     "Description": readset.description + ' - ' + readset.protocol + ' - ' + readset.library_source,
                     "Control": readset.control,
                     "Recipe": readset.recipe,
@@ -3191,23 +3234,15 @@ class RunProcessing(common.MUGQICPipeline):
         self._index_per_readset = index_per_readset
 
         # Create index folder if not already done
-        if not os.path.exists(os.path.join(self.output_dir, "index")):
-            try:
-                os.makedirs(os.path.join(self.output_dir, "index"))
-            except OSError as exc: # Guard against race condition
-               if exc.errno != errno.EEXIST:
-                   raise
-        # Python3 syntax
-        #os.makedirs(os.path.dirname(index_file), exist_ok=True)
+        os.makedirs(os.path.join(self.output_dir, "index"), exist_ok=True)
 
         # Print to file
         index_json = os.path.join(self.output_dir, "index", self.run_id + "_" + lane + ".index_per_readset.json")
         with open(index_json, 'w') as out_json:
             out_json.write(json.dumps(index_per_readset, indent=4))
 
-        if self.umi:
-            output_dir_noindex = output_dir + ".noindex"
-            casava_sample_sheet_noindex = re.sub(".indexed.", ".noindex.", casava_sample_sheet)
+        if self.umi or len(self.readsets[lane]) == 1:
+            casava_sample_sheet_noindex = re.sub(".indexed.", ".noindex.", csv_file)
             writer = csv.DictWriter(
                 open(casava_sample_sheet_noindex, 'w'),
                 delimiter=str(','),
@@ -3215,18 +3250,18 @@ class RunProcessing(common.MUGQICPipeline):
             )
             writer.writerow(
                 {
-                    "FCID": readset.flow_cell,
-                    "Lane": self.lane_number,
-                    "Sample_ID": "Sample_ALL",
-                    "Sample_Name": "ALL",
+                    "FCID": self.readsets[lane][0].flow_cell,
+                    "Lane": lane,
+                    "Sample_ID": "Sample_ALL" if self.umi else "Sample_"+self.readsets[lane][0].name,
+                    "Sample_Name": "ALL" if self.umi else self.readsets[lane][0].name,
                     "SampleRef": "",
                     "Index": "",
                     "Index2": "",
-                    "Description": "",
+                    "Description": "" if self.umi else self.readsets[lane][0].description + ' - ' + self.readsets[lane][0].protocol + ' - ' + self.readsets[lane][0].library_source,
                     "Control": "N",
                     "Recipe": "",
                     "Operator": "",
-                    "Sample_Project": "Project_ALL"
+                    "Sample_Project": "Project_ALL" if self.umi else "Project_" + self.readsets[lane][0].project_id
                 }
             )
 
