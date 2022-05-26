@@ -40,7 +40,7 @@ import utils.utils
 
 from bfx import bedtools
 from bfx import bwa
-from bfx import cufflinks   
+from bfx import cufflinks
 from bfx import stringtie
 from bfx import ballgown
 from bfx import differential_expression
@@ -71,6 +71,7 @@ from bfx import gmap_fusion
 from bfx import fusionmetacaller
 from bfx import fusioninspector
 from bfx import star
+from bfx import rseqc
 
 from bfx import bash_cmd as bash
 
@@ -177,7 +178,7 @@ END
                 adapter_file = os.path.join(output_dir, "adapter.tsv")
 
             if readset.run_type == "PAIRED_END":
-                candidate_input_files = [[trim_file_prefix + "pair1.fastq.gz", trim_file_prefix + "pair2.fastq.gz"]]
+                candidate_input_files = [[trim_file_prefix + ".pair1.fastq.gz", trim_file_prefix + ".pair2.fastq.gz"]]
                 if readset.fastq1 and readset.fastq2:
                     candidate_input_files.append([readset.fastq1, readset.fastq2])
                 if readset.bam:
@@ -440,32 +441,24 @@ pandoc --to=markdown \\
             alignment_file_prefix = os.path.join("alignment", sample.name, sample.name + ".")
             input = alignment_file_prefix + "sorted.bam"
             output = alignment_file_prefix + "sorted.mdup.bam"
-            metrics_file = alignment_file_prefix + "sorted.mdup.metrics"
 
-            job = gatk4.picard_mark_duplicates(
-                [input],
-                output,
-                metrics_file
-            )
-            job.name = "picard_mark_duplicates." + sample.name
-            jobs.append(job)
-
-            report_file = os.path.join("report", "DnaSeq.picard_mark_duplicates.md")
-            jobs.append(
-                Job(
-                    [os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam") for sample in self.samples],
-                    [report_file],
-                    command="""\
-    mkdir -p report && \\
-    cp \\
-      {report_template_dir}/{basename_report_file} \\
-      {report_file}""".format(
-                        report_template_dir=self.report_template_dir,
-                        basename_report_file=os.path.basename(report_file),
-                        report_file=report_file
-                    ),
-                    report_files=[report_file],
-                    name="picard_mark_duplicates_report")
+            metrics_file = os.path.join("metrics",
+                                        "rna",
+                                        sample.name,
+                                        sample.name + ".sorted.mdup.metrics")
+            jobs.append(concat_jobs([
+                bash.mkdir(
+                    os.path.join("metrics",
+                                 "rna",
+                                 sample.name),
+                    remove=True
+                ),
+                gatk4.picard_mark_duplicates(
+                    [input],
+                    output,
+                    metrics_file
+                ),
+            ],name = "picard_mark_duplicates." + sample.name)
             )
 
         return jobs
@@ -512,37 +505,86 @@ pandoc --to=markdown \\
         jobs = []
         reference_file = config.param('picard_rna_metrics', 'genome_fasta', type='filepath')
         for sample in self.samples:
-            alignment_file = os.path.join(
-                "alignment",
-                sample.name,
-                sample.name
-                + ".sorted.mdup.split.realigned.recal.bam"
-            )
-            output_directory = os.path.join("metrics", sample.name)
+            alignment_directory = os.path.join("alignment", sample.name)
+            [input] = self.select_input_files([
+                [os.path.join(alignment_directory, sample.name + ".sorted.mdup.split.realigned.recal.bam")],
+                [os.path.join(alignment_directory, sample.name + ".sorted.mdup.bam")]
+            ])
+            
+            output_directory = os.path.join("metrics", "rna", sample.name)
 
             job = concat_jobs([
                 bash.mkdir(
                     output_directory,
                     remove=True
                 ),
-                    gatk4.collect_multiple_metrics(
-                        alignment_file,
-                        os.path.join(output_directory, sample.name),
-                        reference_file
-                    ),
-                    gatk4.collect_rna_metrics(
-                        alignment_file,
+                gatk4.collect_multiple_metrics(
+                    input,
+                    os.path.join(output_directory, sample.name),
+                    reference_file
+                ),
+                gatk4.collect_rna_metrics(
+                        input,
                         os.path.join(output_directory, sample.name + ".picard_rna_metrics")
-                    )
-                ], name="picard_rna_metrics." + sample.name)
+                )
+            ], name="picard_rna_metrics." + sample.name)
 
             jobs.append(job)
 
         return jobs
 
+    def rseqc(self):
+        """
+        Computes a series of quality control metrics using both CollectRnaSeqMetrics and CollectAlignmentSummaryMetrics functions
+        metrics are collected using [Picard](http://broadinstitute.github.io/picard/).
+        """
+    
+        jobs = []
+        reference_file = config.param('picard_rna_metrics', 'genome_fasta', type='filepath')
+        for sample in self.samples:
+            alignment_directory = os.path.join("alignment", sample.name)
+            [input] = self.select_input_files([
+                [os.path.join(alignment_directory, sample.name + ".sorted.mdup.split.realigned.recal.bam")],
+                [os.path.join(alignment_directory, sample.name + ".sorted.mdup.bam")]
+            ])
+        
+            output_directory = os.path.join("metrics", "rna", sample.name)
+
+            mkdir_job = bash.mkdir(
+                output_directory,
+                remove=True
+            )
+
+            jobs.append(
+                concat_jobs([
+                    mkdir_job,
+                    rseqc.tin(
+                        input,
+                    )
+                ],
+                    name="rseqc.tin." + sample.name,
+                    samples=[sample]
+                )
+            )
+            
+            jobs.append(
+                concat_jobs([
+                    mkdir_job,
+                    rseqc.junction_saturation(
+                        input,
+                        os.path.join(output_directory, sample.name + ".junction_saturation")
+                    )
+                ],
+                    name="rseqc.junction_saturation." + sample.name,
+                    samples=[sample]
+                )
+            )
+            
+        return jobs
+    
     def bam_hard_clip(self):
         jobs = []
-        
+
         for sample in self.samples:
             alignment_input = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam")
             alignment_output = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.hardClip.bam")
@@ -583,6 +625,7 @@ pandoc --to=markdown \\
             alignment_directory = os.path.join("alignment", sample.name)
             [input] = self.select_input_files([
                 [os.path.join(alignment_directory, sample.name + ".sorted.mdup.split.realigned.recal.bam")],
+                [os.path.join(alignment_directory, sample.name + ".sorted.mdup.bam")]
             ])
 
             job = gatk4.callable_loci(
@@ -600,88 +643,61 @@ pandoc --to=markdown \\
             """
             Computes a series of quality control metrics using [RNA-SeQC](https://www.broadinstitute.org/cancer/cga/rna-seqc).
             """
-    
             jobs = []
-            sample_file = os.path.join("alignment", "rnaseqc.samples.txt")
-            sample_rows = [
-                [sample.name, os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam"), "RNAseq"] for
-                sample in self.samples]
-            input_bams = [sample_row[1] for sample_row in sample_rows]
-            output_directory = os.path.join("metrics", "rnaseqRep")
+
             # Use GTF with transcript_id only otherwise RNASeQC fails
             gtf_transcript_id = config.param('rnaseqc', 'gtf_transcript_id', type='filepath')
-    
-            jobs.append(concat_jobs([
-                Job(command="mkdir -p " + output_directory, removable_files=[output_directory], samples=self.samples),
-                Job(input_bams, [sample_file], command="""\
-    echo "Sample\tBamFile\tNote
-    {sample_rows}" \\
-      > {sample_file}""".format(sample_rows="\n".join(["\t".join(sample_row) for sample_row in sample_rows]),
-                                sample_file=sample_file)),
-                metrics.rnaseqc(sample_file, output_directory, self.run_type == "SINGLE_END",
-                                gtf_file=gtf_transcript_id,
-                                reference=config.param('rnaseqc', 'genome_fasta', type='filepath'),
-                                ribosomal_interval_file=config.param('rnaseqc', 'ribosomal_fasta', type='filepath')),
-                Job([], [output_directory + ".zip"], command="zip -r {output_directory}.zip {output_directory}".format(
-                    output_directory=output_directory))
-            ], name="rnaseqc"))
-    
-            trim_metrics_file = os.path.join("metrics", "trimSampleTable.tsv")
-            metrics_file = os.path.join("metrics", "rnaseqRep", "metrics.tsv")
-            report_metrics_file = os.path.join("report", "trimAlignmentTable.tsv")
-            report_file = os.path.join("report", "RnaSeq.rnaseqc.md")
-            jobs.append(
-                Job(
-                    [metrics_file],
-                    [report_file, report_metrics_file],
-                    [['rnaseqc', 'module_python'], ['rnaseqc', 'module_pandoc']],
-                    # Ugly awk to merge sample metrics with trim metrics if they exist; knitr may do this better
-                    command="""\
-    mkdir -p report && \\
-    cp {output_directory}.zip report/reportRNAseqQC.zip && \\
-    python -c 'import csv; csv_in = csv.DictReader(open("{metrics_file}"), delimiter="\t")
-    print "\t".join(["Sample", "Aligned Reads", "Alternative Alignments", "%", "rRNA Reads", "Coverage", "Exonic Rate", "Genes"])
-    print "\\n".join(["\t".join([
-        line["Sample"],
-        line["Mapped"],
-        line["Alternative Aligments"],
-        str(float(line["Alternative Aligments"]) / float(line["Mapped"]) * 100),
-        line["rRNA"],
-        line["Mean Per Base Cov."],
-        line["Exonic Rate"],
-        line["Genes Detected"]
-    ]) for line in csv_in])' \\
-      > {report_metrics_file}.tmp && \\
-    if [[ -f {trim_metrics_file} ]]
-    then
-      awk -F"\t" 'FNR==NR{{raw_reads[$1]=$2; surviving_reads[$1]=$3; surviving_pct[$1]=$4; next}}{{OFS="\t"; if ($2=="Aligned Reads"){{surviving_pct[$1]="%"; aligned_pct="%"; rrna_pct="%"}} else {{aligned_pct=($2 / surviving_reads[$1] * 100); rrna_pct=($5 / surviving_reads[$1] * 100)}}; printf $1"\t"raw_reads[$1]"\t"surviving_reads[$1]"\t"surviving_pct[$1]"\t"$2"\t"aligned_pct"\t"$3"\t"$4"\t"$5"\t"rrna_pct; for (i = 6; i<= NF; i++) {{printf "\t"$i}}; print ""}}' \\
-      {trim_metrics_file} \\
-      {report_metrics_file}.tmp \\
-      > {report_metrics_file}
-    else
-      cp {report_metrics_file}.tmp {report_metrics_file}
-    fi && \\
-    rm {report_metrics_file}.tmp && \\
-    trim_alignment_table_md=`if [[ -f {trim_metrics_file} ]] ; then cut -f1-13 {report_metrics_file} | LC_NUMERIC=en_CA awk -F "\t" '{{OFS="|"; if (NR == 1) {{$1 = $1; print $0; print "-----|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:"}} else {{print $1, sprintf("%\\47d", $2), sprintf("%\\47d", $3), sprintf("%.1f", $4), sprintf("%\\47d", $5), sprintf("%.1f", $6), sprintf("%\\47d", $7), sprintf("%.1f", $8), sprintf("%\\47d", $9), sprintf("%.1f", $10), sprintf("%.2f", $11), sprintf("%.2f", $12), sprintf("%\\47d", $13)}}}}' ; else cat {report_metrics_file} | LC_NUMERIC=en_CA awk -F "\t" '{{OFS="|"; if (NR == 1) {{$1 = $1; print $0; print "-----|-----:|-----:|-----:|-----:|-----:|-----:|-----:"}} else {{print $1, sprintf("%\\47d", $2), sprintf("%\\47d", $3), sprintf("%.1f", $4), sprintf("%\\47d", $5), sprintf("%.2f", $6), sprintf("%.2f", $7), $8}}}}' ; fi`
-    pandoc \\
-      {report_template_dir}/{basename_report_file} \\
-      --template {report_template_dir}/{basename_report_file} \\
-      --variable trim_alignment_table="$trim_alignment_table_md" \\
-      --to markdown \\
-      > {report_file}""".format(
-                        output_directory=output_directory,
-                        report_template_dir=self.report_template_dir,
-                        trim_metrics_file=trim_metrics_file,
-                        metrics_file=metrics_file,
-                        basename_report_file=os.path.basename(report_file),
-                        report_metrics_file=report_metrics_file,
-                        report_file=report_file
+            for sample in self.samples:
+                alignment_file_prefix = os.path.join("alignment", sample.name, sample.name)
+                alignment_directory = os.path.join("alignment", sample.name)
+                [input] = self.select_input_files([
+                    [os.path.join(alignment_file_prefix + ".sorted.mdup.split.realigned.recal.bam")],
+                    [os.path.join(alignment_file_prefix + ".sorted.mdup.bam")]
+                ])
+
+                sample_file = os.path.join(alignment_directory, "rnaseqc.samples.txt")
+                output_directory = os.path.join("metrics", "rna", sample.name, "rnaseqc")
+
+                jobs.append(concat_jobs([
+                    Job(
+                        command="mkdir -p " + output_directory,
+                        removable_files=[output_directory],
+                        samples=self.samples
+                        ),
+                    Job(
+                        [input],
+                        [sample_file], command="""\
+echo "Sample\tBamFile\tNote
+{sample_name}\t{sample_rows}\tRNAseq" \\
+> {sample_file}""".format(
+                            sample_name=sample.name,
+                            sample_rows=input,
+                            sample_file=sample_file
+                        )
                     ),
-                    report_files=[report_file],
-                    name="rnaseqc_report",
-                    samples=self.samples
-                )
-            )
+                    
+                metrics.rnaseqc(sample_file,
+                                output_directory,
+                                self.run_type == "SINGLE_END",
+                                gtf_file=gtf_transcript_id,
+                                reference=config.param(
+                                    'rnaseqc',
+                                    'genome_fasta',
+                                    type='filepath'
+                                ),
+                                ribosomal_interval_file=config.param(
+                                    'rnaseqc',
+                                    'ribosomal_fasta',
+                                    type='filepath'
+                                )
+                                ),
+                #Job(
+                #    [],
+                #    [output_directory + ".zip"],
+                #    command="zip -r {output_directory}.zip {output_directory}".format(
+                #    output_directory=output_directory)
+                #    )
+            ], name="rnaseqc." + sample.name))
     
             return jobs
 
@@ -874,13 +890,13 @@ pandoc --to=markdown \\
                             realign_directory,
                             remove=True
                         ),
-                        gatk.realigner_target_creator(
+                        gatk4.realigner_target_creator(
                             input,
                             realign_intervals,
                             intervals=intervals,
                             output_dir=self.output_dir,
                         ),
-                        gatk.indel_realigner(
+                        gatk4.indel_realigner(
                             input,
                             output=output_bam,
                             target_intervals=realign_intervals,
@@ -901,13 +917,13 @@ pandoc --to=markdown \\
                         realign_directory,
                         remove=True
                     ),
-                    gatk.realigner_target_creator(
+                    gatk4.realigner_target_creator(
                         input,
                         realign_intervals,
                         exclude_intervals=unique_sequences_per_job_others,
                         output_dir=self.output_dir,
                     ),
-                    gatk.indel_realigner(
+                    gatk4.indel_realigner(
                         input,
                         output=output_bam,
                         target_intervals=realign_intervals,
@@ -986,11 +1002,19 @@ pandoc --to=markdown \\
                     # created_interval_lists.append(interval_list)
         
             jobs.append(concat_jobs([
-                gatk.base_recalibrator(input, base_recalibrator_output, intervals=interval_list),
+                gatk4.base_recalibrator(
+                    input,
+                    base_recalibrator_output,
+                    intervals=interval_list
+                ),
             ], name="gatk_base_recalibrator." + sample.name))
         
             jobs.append(concat_jobs([
-                gatk.print_reads(input, print_reads_output, base_recalibrator_output),
+                gatk4.print_reads(
+                    input,
+                    print_reads_output,
+                    base_recalibrator_output
+                ),
             ], name="gatk_print_reads." + sample.name))
     
         return jobs
@@ -1019,8 +1043,14 @@ pandoc --to=markdown \\
             if nb_haplotype_jobs == 1:
                 job = concat_jobs([
                     # Create output directory since it is not done by default by GATK tools
-                    Job(command="mkdir -p " + haplotype_directory, removable_files=[haplotype_directory]),
-                    gatk.haplotype_caller(input, os.path.join(haplotype_directory, sample.name + ".hc.vcf.gz"))
+                    Job(
+                        command="mkdir -p " + haplotype_directory,
+                        removable_files=[haplotype_directory]
+                    ),
+                    gatk4.haplotype_caller(
+                        input,
+                        os.path.join(haplotype_directory, sample.name + ".hc.vcf.gz")
+                    )
                 ], name="gatk_haplotype_caller." + sample.name)
                 job.samples = [sample]
                 jobs.append(job)
@@ -1036,10 +1066,17 @@ pandoc --to=markdown \\
                 for idx, sequences in enumerate(unique_sequences_per_job):
                     job = concat_jobs([
                         # Create output directory since it is not done by default by GATK tools
-                        Job(command="mkdir -p " + haplotype_directory, removable_files=[haplotype_directory]),
-                        gatk.haplotype_caller(input, os.path.join(haplotype_directory,
-                                                                  sample.name + "." + str(idx) + ".hc.vcf.gz"),
-                                              intervals=sequences)
+                        Job(
+                            command="mkdir -p " + haplotype_directory,
+                            removable_files=[haplotype_directory]
+                        ),
+                        gatk4.haplotype_caller(
+                            input, os.path.join(
+                                haplotype_directory,
+                                sample.name + "." + str(idx) + ".hc.vcf.gz"
+                            ),
+                            intervals=sequences
+                        )
                     ], name="gatk_haplotype_caller." + sample.name + "." + str(idx))
                     job.samples = [sample]
                     jobs.append(job)
@@ -1047,9 +1084,17 @@ pandoc --to=markdown \\
                 # Create one last job to process the last remaining sequences and 'others' sequences
                 job = concat_jobs([
                     # Create output directory since it is not done by default by GATK tools
-                    Job(command="mkdir -p " + haplotype_directory, removable_files=[haplotype_directory]),
-                    gatk.haplotype_caller(input, os.path.join(haplotype_directory, sample.name + ".others.hc.vcf.gz"),
-                                          exclude_intervals=unique_sequences_per_job_others)
+                    Job(
+                        command="mkdir -p " + haplotype_directory,
+                        removable_files=[haplotype_directory]
+                    ),
+                    gatk4.haplotype_caller(
+                        input,
+                        os.path.join(haplotype_directory,
+                                     sample.name + ".others.hc.vcf.gz"
+                                     ),
+                        exclude_intervals=unique_sequences_per_job_others
+                    )
                 ], name="gatk_haplotype_caller." + sample.name + ".others")
                 job.samples = [sample]
                 jobs.append(job)
@@ -1078,7 +1123,10 @@ pandoc --to=markdown \\
                 vcfs_to_merge.append(haplotype_file_prefix + ".others.hc.vcf.gz")
         
             job = concat_jobs([
-                gatk.cat_variants(vcfs_to_merge, output_haplotype_file_prefix + ".hc.vcf.gz"),
+                gatk4.cat_variants(
+                    vcfs_to_merge,
+                    output_haplotype_file_prefix + ".hc.vcf.gz"
+                ),
             ], name="merge_hc_vcf." + sample.name)
             job.samples = [sample]
             jobs.append(job)
@@ -1096,12 +1144,16 @@ pandoc --to=markdown \\
             input = os.path.join("alignment", sample.name, sample.name + ".hc.vcf.gz")
             output = os.path.join("alignment", sample.name, sample.name + ".hc.rnaedit.vcf.gz")
             
-            job = concat_jobs([
+            job = pipe_jobs([
                 vcfanno.run(
                     input,
-                    output,
+                    None,
+                ),
+                htslib.bgzip_tabix(
+                    None,
+                    output
                 )
-            ], name="run_vcfanno.rnaedit" + sample.name)
+            ], name="run_vcfanno.rnaedit." + sample.name)
             
             job.samples = [sample]
             jobs.append(job)
@@ -1121,7 +1173,7 @@ pandoc --to=markdown \\
             input_file_prefix = os.path.join("alignment", sample.name, sample.name)
         
             job = concat_jobs([
-                gatk.variant_filtration(
+                gatk4.variant_filtration(
                     input_file_prefix + ".hc.rnaedit.vcf.gz",
                     input_file_prefix + ".hc.flt.vcf.gz",
                     config.param('gatk_variant_filtration', 'other_options')
@@ -1252,7 +1304,11 @@ pandoc --to=markdown \\
         
             job = concat_jobs([
                 mkdir_job,
-                star_fusion.run(left_fastqs[sample.name], right_fastqs[sample.name], output_dir)
+                star_fusion.run(
+                    left_fastqs[sample.name],
+                    right_fastqs[sample.name],
+                    output_dir
+                )
             ], name="run_star_fusion." + sample.name)
             job.samples = [sample]
             jobs.append(job)
@@ -1291,13 +1347,18 @@ pandoc --to=markdown \\
         
             else:
                 raise Exception("Error: run type \"" + readset.run_type +
-                                "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!")
+                                "\" is invalid for readset \"" + readset.name +
+                                "\" (should be PAIRED_END or SINGLE_END)!")
         
             left_fastqs[readset.sample.name].append(fastq1)
             right_fastqs[readset.sample.name].append(fastq2)
     
         for sample in self.samples:
-            output_dir = os.path.join("fusion", sample.name, "star_seqr")
+            output_dir = os.path.join(
+                "fusion",
+                sample.name,
+                "star_seqr"
+            )
         
             star_seqr_dir = os.path.join(output_dir, "temp_fastq")
         
@@ -1327,7 +1388,11 @@ pandoc --to=markdown \\
             else:
                 job = concat_jobs([
                     mkdir_job,
-                    star_seqr.run(left_fastqs[sample.name], right_fastqs[sample.name], output_dir)
+                    star_seqr.run(
+                        left_fastqs[sample.name],
+                        right_fastqs[sample.name],
+                        output_dir
+                    )
                 ], name="run_star_seqr." + sample.name)
             
                 job.samples = [sample]
@@ -1382,7 +1447,11 @@ pandoc --to=markdown \\
             job = concat_jobs([
                 mkdir_job,
                 chgdir_job,
-                arriba.run(left_fastqs[sample.name], right_fastqs[sample.name], output_dir)
+                arriba.run(
+                    left_fastqs[sample.name],
+                    right_fastqs[sample.name],
+                    output_dir
+                )
             ], name="run_arriba." + sample.name)
             job.samples = [sample]
             jobs.append(job)
@@ -1483,7 +1552,8 @@ pandoc --to=markdown \\
         jobs = []
 
         for sample in self.samples:
-            arriba_output = os.path.join("fusion", sample.name, "arriba", "fusions.tsv")
+            arriba_output = os.path.join("fusion", sample.name, "arriba",
+                                         "fusions.tsv")
             star_fusion_output = os.path.join("fusion", sample.name, "star_fusion",
                                               "star-fusion.fusion_predictions.abridged.coding_effect.tsv")
             output = os.path.join("fusion", sample.name, "annoFuse")
@@ -2337,7 +2407,35 @@ done""".format(
                 self.skewer_trimming,
                 self.star,
                 self.picard_merge_sam_files,
-                self.picard_sort_sam,
+                self.picard_mark_duplicates,
+                self.split_N_trim,
+                self.sambamba_merge_splitNtrim_files,
+                self.gatk_indel_realigner,
+                self.sambamba_merge_realigned,
+                self.recalibration,
+                self.gatk_haplotype_caller,
+                self.merge_hc_vcf,
+                self.run_vcfanno,
+                self.variant_filtration,
+                self.decompose_and_normalize,
+                self.compute_snp_effects,
+                self.gemini_annotations,
+                self.picard_rna_metrics,
+                self.estimate_ribosomal_rna,
+                self.rnaseqc,
+                self.gatk_callable_loci,
+                self.wiggle,
+                self.raw_counts,
+                self.raw_counts_metrics,
+                self.ihec_metrics,
+                self.cram_output
+            ],
+            [
+                self.picard_sam_to_fastq,
+                self.skewer_trimming,
+                self.star,
+                self.picard_merge_sam_files,
+                #self.picard_sort_sam,
                 self.picard_mark_duplicates,
                 self.split_N_trim,
                 self.sambamba_merge_splitNtrim_files,
@@ -2357,6 +2455,7 @@ done""".format(
                 self.picard_rna_metrics,
                 self.estimate_ribosomal_rna,
                 self.rnaseqc,
+                self.rseqc,
                 self.gatk_callable_loci,
                 self.wiggle,
                 self.raw_counts,
@@ -2369,7 +2468,7 @@ class RnaSeq(RnaSeqRaw):
     def __init__(self, protocol=None):
         self._protocol = protocol
         # Add pipeline specific arguments
-        self.argparser.add_argument("-t", "--type", help="RNAseq analysis type", choices=["stringtie","cufflinks","variants"], default="stringtie")
+        self.argparser.add_argument("-t", "--type", help="RNAseq analysis type", choices=["stringtie","cufflinks","variants","cancer"], default="stringtie")
         super(RnaSeq, self).__init__(protocol)
 
 if __name__ == '__main__':
@@ -2377,4 +2476,4 @@ if __name__ == '__main__':
     if '--wrap' in argv:
         utils.utils.container_wrapper_argparse(argv)
     else:
-        RnaSeq(protocol=['cufflinks','stringtie','variants'])
+        RnaSeq(protocol=['stringtie','cufflinks','variants', 'cancer'])

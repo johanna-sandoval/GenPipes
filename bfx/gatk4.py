@@ -106,10 +106,10 @@ def split_n_cigar_reads(
             command="""\
 gatk --java-options "-Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram}" \\
   SplitNCigarReads {other_options} \\
-  --TMP_DIR {tmp_dir} \\
-  --reference_sequence {reference_sequence} \\
-  --input_file {input} \\
-  --out {output}{intervals}{exclude_intervals}""".format(
+  --tmp-dir {tmp_dir} \\
+  --reference {reference_sequence} \\
+  --input {input} \\
+  --output {output}{intervals}{exclude_intervals}""".format(
             tmp_dir=config.param('gatk_split_N_trim', 'tmp_dir'),
             java_other_options=config.param('gatk_split_N_trim', 'gatk4_java_options'),
             ram=config.param('gatk_split_N_trim', 'ram'),
@@ -119,7 +119,7 @@ gatk --java-options "-Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram}" 
             output=output,
             intervals="".join(" \\\n  --intervals " + interval for interval in intervals),
             interval_list=" \\\n --interval-padding 100 --intervals " + interval_list if interval_list else "",
-            exclude_intervals="".join(" \\\n  --excludeIntervals " + exclude_interval for exclude_interval in exclude_intervals)
+            exclude_intervals="".join(" \\\n  --exclude-intervals " + exclude_interval for exclude_interval in exclude_intervals)
         )
     )
 
@@ -902,14 +902,39 @@ def variant_filtration(
     output,
     other_options
     ):
-
-    return gatk.variant_filtration(
-        input,
-        output,
-        other_options
-    )
-
-
+    
+    if config.param('gatk_variant_filtration', 'module_gatk').split("/")[2] < "4":
+        return gatk.variant_filtration(
+            input,
+            output,
+            other_options
+        )
+    else:
+        return Job(
+            [
+                input,
+            ],
+                output,
+            [
+                ['gatk_variant_filtration', 'module_java'],
+                ['gatk_variant_filtration', 'module_gatk']
+            ],
+            command="""\
+gatk --java-options "-Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram}" \\
+  VariantFiltration \\
+  --reference {reference_sequence} \\
+  --variant {variants} \\
+  {other_options} \\
+  --output {output}""".format(
+                tmp_dir=config.param('gatk_variant_filtration', 'tmp_dir'),
+                java_other_options=config.param('gatk_variant_filtration', 'gatk4_java_options'),
+                ram=config.param('gatk_variant_filtration', 'ram'),
+                reference_sequence=config.param('gatk_variant_filtration', 'genome_fasta', type='filepath'),
+                variants=input,
+                other_options=other_options,
+                output=output
+        ))
+    
 #####################
 #  Copy Number Variant Discovery
 

@@ -44,6 +44,6 @@ vcfanno {options} \\
             lua=config.param('run_vcfanno', 'lua'),
             config=config.param('run_vcfanno', 'config'),
             input=input,
-            output=output,
+            output=" \\\n > " + output if output else "",
         )
     )

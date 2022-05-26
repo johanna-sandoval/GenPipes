@@ -43,10 +43,11 @@ Rscript $R_TOOLS/DNAsampleMetrics.R \\
         )
     )
 
+#, os.path.join(output_directory, "corrMatrixSpearman.txt")
 def rnaseqc(sample_file, output_directory, is_single_end=False, gtf_file=None, reference=None, ribosomal_interval_file=None):
     return Job(
         [sample_file],
-        [os.path.join(output_directory, "index.html"), os.path.join(output_directory, "metrics.tsv"), os.path.join(output_directory, "corrMatrixSpearman.txt")],
+        [os.path.join(output_directory, "index.html"), os.path.join(output_directory, "metrics.tsv")],
         [
             ['rnaseqc', 'module_java'],
             ['rnaseqc', 'module_bwa'],

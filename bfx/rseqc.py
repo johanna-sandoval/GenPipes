@@ -34,14 +34,14 @@ def bam_stat(input, output):
         [input],
         [output],
         [
-            ['rnaseqr','module_python']
+            ['rseqc','module_rseqc']
         ],
 
     command="""\
-    bam_stat.py \\
+    bam_stat.py {options} \\
         -i {input} \\
-        -q 30 \\
         > {output}""".format(
+            options=config.param('rseqc', 'bam_stat_options'),
             input=input,
             output=output,
         ),
@@ -52,7 +52,7 @@ def gene_body_coverage(input, output):
         [input],
         [output],
         [
-            ['rnaseqr', 'module_python']
+            ['rseqc', 'module_rseqc']
         ],
 
         command="""\
@@ -60,7 +60,7 @@ def gene_body_coverage(input, output):
             -r {geneBody} \\
             -i {input} \\
             -o {output}""".format(
-            geneBody=config.param('runseqr', 'geneBody'),
+            geneBody=config.param('rseqc', 'housekeeping'),
             input=input,
             output=output,
         ),
@@ -71,15 +71,15 @@ def infer_experiment(input, output):
         [input],
         [output],
         [
-            ['rnaseqr', 'module_python']
+            ['rseqc', 'module_rseqc']
         ],
 
         command="""\
         infer_experiment.py \\
-            -r {refseq} \\
+            -r {ref_gene_model} \\
             -i {input} \\
             > {output}""".format(
-            refseq=config.param('runseqr', 'refseq'),
+            ref_gene_model=config.param('rseqc', 'ref_gene_model'),
             input=input,
             output=output,
         ),
@@ -90,15 +90,15 @@ def inner_distance(input, output):
         [input],
         [output],
         [
-            ['rnaseqr', 'module_python']
+            ['rseqc', 'module_rseqc']
         ],
 
         command="""\
         inner_distance.py \\
-            -r {refseq} \\
+            -r {ref_gene_model} \\
             -i {input} \\
             -o {output}""".format(
-            refseq=config.param('runseqr', 'refseq'),
+            ref_gene_model=config.param('rseqc', 'ref_gene_model'),
             input=input,
             output=output,
         ),
@@ -109,7 +109,7 @@ def junction_annotation(input, output):
         [input],
         [output],
         [
-            ['rnaseqr', 'module_python']
+            ['rseqc', 'module_rseqc']
         ],
 
         command="""\
@@ -117,7 +117,7 @@ def junction_annotation(input, output):
             -r {refseq} \\
             -i {input} \\
             -o {output}""".format(
-            refseq=config.param('runseqr', 'refseq'),
+            refseq=config.param('rseqc', 'refseq'),
             input=input,
             output=output,
         ),
@@ -128,16 +128,34 @@ def junction_saturation(input, output):
         [input],
         [output],
         [
-            ['rnaseqr', 'module_python']
+            ['rseqc', 'module_rseqc']
         ],
 
         command="""\
         junction_saturation.py \\
-            -r {refseq} \\
+            -r {ref_gene_model} \\
             -i {input} \\
             -o {output}""".format(
-            refseq=config.param('runseqr', 'refseq'),
+            ref_gene_model=config.param('rseqc', 'ref_gene_model'),
             input=input,
             output=output,
+        ),
+    )
+
+def tin(input):
+    output = re.sub("\.bam$", ".summary.txt", os.path.basename(input))
+    return Job(
+        [input],
+        [output],
+        [
+            ['rseqc', 'module_rseqc']
+        ],
+
+        command="""\
+        tin.py \\
+            -r {ref_gene_model} \\
+            -i {input}""".format(
+            ref_gene_model=config.param('rseqc', 'ref_gene_model'),
+            input=input
         ),
     )
