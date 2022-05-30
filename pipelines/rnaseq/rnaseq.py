@@ -22,7 +22,9 @@
 # Python Standard Modules
 import argparse
 import collections
+import csv
 import logging
+import math
 import os
 import re
 import sys
@@ -38,6 +40,7 @@ from pipelines import common
 from bfx.sequence_dictionary import parse_sequence_dictionary_file, split_by_size
 import utils.utils
 
+#Expression tools
 from bfx import bedtools
 from bfx import bwa
 from bfx import cufflinks
@@ -53,6 +56,9 @@ from bfx import bvatools
 from bfx import rmarkdown
 from bfx import tools
 from bfx import ucsc
+from bfx import star
+
+#Variant tools
 from bfx import gatk
 from bfx import gatk4
 from bfx import sambamba
@@ -70,7 +76,6 @@ from bfx import discasm
 from bfx import gmap_fusion
 from bfx import fusionmetacaller
 from bfx import fusioninspector
-from bfx import star
 from bfx import rseqc
 
 from bfx import bash_cmd as bash
@@ -203,7 +208,15 @@ END
 
         return jobs
 
+    def star_genome_length(self):
+        """
+        Calculation for setting genomeSAindexNbases for STAR index
+        """
+        genome_index = csv.reader(open(config.param('DEFAULT', 'genome_fasta', param_type='filepath') + ".fai", 'r'),
+                                  delimiter='\t')
     
+        return int(min(14, math.log2(sum([int(chromosome[1]) for chromosome in genome_index])) / 2 - 1))
+
     def star(self):
         """
         The filtered reads are aligned to a reference genome. The alignment is done per readset of sequencing
@@ -219,21 +232,22 @@ END
         jobs = []
         project_index_directory = "reference.Merged"
         project_junction_file = os.path.join("alignment_1stPass", "AllSamples.SJ.out.tab")
-        individual_junction_list=[]
+        individual_junction_list = []
+        genome_length = self.star_genome_length()
         ######
-        #pass 1 -alignment
+        # pass 1 -alignment
         for readset in self.readsets:
-            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + "-trimmed-")
-            #trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + ".trim.")
+            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + ".trim.")
             alignment_1stPass_directory = os.path.join("alignment_1stPass", readset.sample.name, readset.name)
-            individual_junction_list.append(os.path.join(alignment_1stPass_directory,"SJ.out.tab"))
-
+            individual_junction_list.append(os.path.join(alignment_1stPass_directory, "SJ.out.tab"))
+    
             if readset.run_type == "PAIRED_END":
                 candidate_input_files = [[trim_file_prefix + "pair1.fastq.gz", trim_file_prefix + "pair2.fastq.gz"]]
                 if readset.fastq1 and readset.fastq2:
                     candidate_input_files.append([readset.fastq1, readset.fastq2])
                 if readset.bam:
-                    candidate_input_files.append([re.sub("\.bam$", ".pair1.fastq.gz", readset.bam), re.sub("\.bam$", ".pair2.fastq.gz", readset.bam)])
+                    candidate_input_files.append([re.sub("\.bam$", ".pair1.fastq.gz", readset.bam),
+                                                  re.sub("\.bam$", ".pair2.fastq.gz", readset.bam)])
                 [fastq1, fastq2] = self.select_input_files(candidate_input_files)
             elif readset.run_type == "SINGLE_END":
                 candidate_input_files = [[trim_file_prefix + "single.fastq.gz"]]
@@ -245,11 +259,11 @@ END
                 fastq2 = None
             else:
                 _raise(SanitycheckError("Error: run type \"" + readset.run_type +
-                "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!"))
-
+                                        "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!"))
+    
             rg_platform = config.param('star_align', 'platform', required=False)
             rg_center = config.param('star_align', 'sequencing_center', required=False)
-
+    
             job = star.align(
                 reads1=fastq1,
                 reads2=fastq2,
@@ -268,30 +282,32 @@ END
 
         ######
         jobs.append(concat_jobs([
-            #pass 1 - contatenate junction
+            # pass 1 - contatenate junction
             Job(samples=self.samples),
             star.concatenate_junction(
                 input_junction_files_list=individual_junction_list,
                 output_junction_file=project_junction_file
             ),
-            #pass 1 - genome indexing
+            # pass 1 - genome indexing
             star.index(
                 genome_index_folder=project_index_directory,
-                junction_file=project_junction_file
-        )], name = "star_index.AllSamples", samples=self.samples))
+                junction_file=project_junction_file,
+                genome_length=genome_length
+            )], name="star_index.AllSamples", samples=self.samples))
 
         ######
-        #Pass 2 - alignment
+        # Pass 2 - alignment
         for readset in self.readsets:
-            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + "-trimmed-")
+            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + ".trim.")
             alignment_2ndPass_directory = os.path.join("alignment", readset.sample.name, readset.name)
-
+    
             if readset.run_type == "PAIRED_END":
                 candidate_input_files = [[trim_file_prefix + "pair1.fastq.gz", trim_file_prefix + "pair2.fastq.gz"]]
                 if readset.fastq1 and readset.fastq2:
                     candidate_input_files.append([readset.fastq1, readset.fastq2])
                 if readset.bam:
-                    candidate_input_files.append([re.sub("\.bam$", ".pair1.fastq.gz", readset.bam), re.sub("\.bam$", ".pair2.fastq.gz", readset.bam)])
+                    candidate_input_files.append([re.sub("\.bam$", ".pair1.fastq.gz", readset.bam),
+                                                  re.sub("\.bam$", ".pair2.fastq.gz", readset.bam)])
                 [fastq1, fastq2] = self.select_input_files(candidate_input_files)
             elif readset.run_type == "SINGLE_END":
                 candidate_input_files = [[trim_file_prefix + "single.fastq.gz"]]
@@ -303,11 +319,11 @@ END
                 fastq2 = None
             else:
                 _raise(SanitycheckError("Error: run type \"" + readset.run_type +
-                "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!"))
-
+                                        "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!"))
+    
             rg_platform = config.param('star_align', 'platform', required=False)
             rg_center = config.param('star_align', 'sequencing_center', required=False)
-
+    
             job = star.align(
                 reads1=fastq1,
                 reads2=fastq2,
@@ -326,24 +342,32 @@ END
             )
             job.samples = [readset.sample]
             job.input_files.append(os.path.join(project_index_directory, "SAindex"))
-
+    
             # If this readset is unique for this sample, further BAM merging is not necessary.
             # Thus, create a sample BAM symlink to the readset BAM.
             # remove older symlink before otherwise it raise an error if the link already exist (in case of redo)
             if len(readset.sample.readsets) == 1:
                 readset_bam = os.path.join(alignment_2ndPass_directory, "Aligned.sortedByCoord.out.bam")
-                sample_bam = os.path.join("alignment", readset.sample.name ,readset.sample.name + ".sorted.bam")
+                sample_bam = os.path.join("alignment", readset.sample.name, readset.sample.name + ".sorted.bam")
                 job = concat_jobs([
                     job,
-                    Job([readset_bam], [sample_bam], command="ln -s -f " + os.path.relpath(readset_bam, os.path.dirname(sample_bam)) + " " + sample_bam, removable_files=[sample_bam])])
-
+                    Job(
+                        [readset_bam],
+                        [sample_bam],
+                        command="ln -s -f " + os.path.relpath(readset_bam,os.path.dirname(sample_bam))
+                                + " " + sample_bam,
+                        removable_files=[sample_bam]
+                    )
+                ])
+    
             job.name = "star_align.2." + readset.name
             jobs.append(job)
 
         report_file = os.path.join("report", "RnaSeq.star.md")
         jobs.append(
             Job(
-                [os.path.join("alignment", readset.sample.name, readset.name, "Aligned.sortedByCoord.out.bam") for readset in self.readsets],
+                [os.path.join("alignment", readset.sample.name, readset.name, "Aligned.sortedByCoord.out.bam") for
+                 readset in self.readsets],
                 [report_file],
                 [['star', 'module_pandoc']],
                 command="""\
@@ -378,7 +402,8 @@ pandoc --to=markdown \\
             # Skip samples with one readset only, since symlink has been created at align step
             if len(sample.readsets) > 1:
                 alignment_directory = os.path.join("alignment", sample.name)
-                inputs = [os.path.join(alignment_directory, readset.name, "Aligned.sortedByCoord.out.bam") for readset in sample.readsets]
+                inputs = [os.path.join(alignment_directory, readset.name, "Aligned.sortedByCoord.out.bam")
+                          for readset in sample.readsets]
                 output = os.path.join(alignment_directory, sample.name + ".sorted.bam")
 
                 job = gatk4.merge_sam_files(
@@ -408,25 +433,6 @@ pandoc --to=markdown \\
             job.name = "picard_sort_sam." + sample.name
             job.samples = [sample]
             jobs.append(job)
-        return jobs
-
-    def sambamba_sort_sam(self):
-        """
-        The alignment file is reordered (QueryName) using [Sambamba](http://lomereiter.github.io/sambamba/docs/sambamba-sort.html). The QueryName-sorted bam files will be used to determine raw read counts.
-        """
-
-        jobs = []
-        for sample in self.samples:
-            alignment_file_prefix = os.path.join("alignment", sample.name, sample.name)
-
-            job = sambamba.sort(
-                alignment_file_prefix + ".sorted.bam",
-                alignment_file_prefix + ".qsorted.bam",
-                os.path.join("alignment", sample.name),
-            )
-            job.name = "sambamba_sort_sam." + sample.name
-            jobs.append(job)
-
         return jobs
 
     def picard_mark_duplicates(self):
@@ -1315,91 +1321,6 @@ echo "Sample\tBamFile\tNote
     
         return jobs
 
-    def run_star_seqr(self):
-        """
-        RNA Fusion Detection and Quantification using STAR
-        https://github.com/ExpressionAnalysis/STAR-SEQR
-        """
-    
-        jobs = []
-        left_fastqs = collections.defaultdict(list)
-        right_fastqs = collections.defaultdict(list)
-    
-        for readset in self.readsets:
-            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + "-trimmed-")
-        
-            if readset.run_type == "PAIRED_END":
-                candidate_input_files = [[trim_file_prefix + "pair1.fastq.gz", trim_file_prefix + "pair2.fastq.gz"]]
-                if readset.fastq1 and readset.fastq2:
-                    candidate_input_files.append([readset.fastq1, readset.fastq2])
-                if readset.bam:
-                    candidate_input_files.append([re.sub("\.bam$", ".pair1.fastq.gz", readset.bam),
-                                                  re.sub("\.bam$", ".pair2.fastq.gz", readset.bam)])
-                [fastq1, fastq2] = self.select_input_files(candidate_input_files)
-            elif readset.run_type == "SINGLE_END":
-                candidate_input_files = [[trim_file_prefix + "single.fastq.gz"]]
-                if readset.fastq1:
-                    candidate_input_files.append([readset.fastq1])
-                if readset.bam:
-                    candidate_input_files.append([re.sub("\.bam$", ".single.fastq.gz", readset.bam)])
-                [fastq1] = self.select_input_files(candidate_input_files)
-                fastq2 = None
-        
-            else:
-                raise Exception("Error: run type \"" + readset.run_type +
-                                "\" is invalid for readset \"" + readset.name +
-                                "\" (should be PAIRED_END or SINGLE_END)!")
-        
-            left_fastqs[readset.sample.name].append(fastq1)
-            right_fastqs[readset.sample.name].append(fastq2)
-    
-        for sample in self.samples:
-            output_dir = os.path.join(
-                "fusion",
-                sample.name,
-                "star_seqr"
-            )
-        
-            star_seqr_dir = os.path.join(output_dir, "temp_fastq")
-        
-            mkdir_job = Job(command="mkdir -p " + star_seqr_dir)
-        
-            temp_left_fastq = os.path.join("trim", sample.name, sample.name + ".pair1.fastq.gz")
-            temp_right_fastq = os.path.join("trim", sample.name, sample.name + ".pair2.fastq.gz")
-        
-            if len(left_fastqs[sample.name]) > 1:
-            
-                jobs.append(concat_jobs([
-                    mkdir_job,
-                    Job(left_fastqs[sample.name], [temp_left_fastq],
-                        command="zcat " + " " + " ".join(left_fastqs[sample.name]) + " | gzip -cf > " + temp_left_fastq,
-                        removable_files=[temp_left_fastq]),
-                    Job(right_fastqs[sample.name], [temp_right_fastq],
-                        command="zcat " + " " + " ".join(
-                            right_fastqs[sample.name]) + " | gzip -cf > " + temp_right_fastq,
-                        removable_files=[temp_right_fastq]),
-                ], name="concat_readset." + sample.name))
-            
-                jobs.append(concat_jobs([
-                    mkdir_job,
-                    star_seqr.run(temp_left_fastq, temp_right_fastq, output_dir)
-                ], name="run_star_seqr." + sample.name))
-        
-            else:
-                job = concat_jobs([
-                    mkdir_job,
-                    star_seqr.run(
-                        left_fastqs[sample.name],
-                        right_fastqs[sample.name],
-                        output_dir
-                    )
-                ], name="run_star_seqr." + sample.name)
-            
-                job.samples = [sample]
-                jobs.append(job)
-    
-        return jobs
-
     def run_arriba(self):
         """
         """
@@ -1458,93 +1379,6 @@ echo "Sample\tBamFile\tNote
     
         return jobs
 
-    def run_discasm_gmap_fusion(self):
-        """
-        """
-    
-        jobs = []
-    
-        left_fastqs = collections.defaultdict(list)
-        right_fastqs = collections.defaultdict(list)
-    
-        for readset in self.readsets:
-            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + "-trimmed-")
-        
-            if readset.run_type == "PAIRED_END":
-                # candidate_input_files = [[trim_file_prefix + "pair1.adj.fastq.gz", trim_file_prefix + "pair2.adj.fastq.gz"]]
-                candidate_input_files = [
-                    [trim_file_prefix + "pair1.adj.fastq.gz", trim_file_prefix + "pair2.adj.fastq.gz"]]
-                if readset.fastq1 and readset.fastq2:
-                    candidate_input_files.append([readset.fastq1, readset.fastq2])
-                if readset.bam:
-                    candidate_input_files.append([re.sub("\.bam$", ".pair1.fastq.gz", readset.bam),
-                                                  re.sub("\.bam$", ".pair2.fastq.gz", readset.bam)])
-                [fastq1, fastq2] = self.select_input_files(candidate_input_files)
-            elif readset.run_type == "SINGLE_END":
-                candidate_input_files = [[trim_file_prefix + "single.fastq.gz"]]
-                if readset.fastq1:
-                    candidate_input_files.append([readset.fastq1])
-                if readset.bam:
-                    candidate_input_files.append([re.sub("\.bam$", ".single.fastq.gz", readset.bam)])
-                [fastq1] = self.select_input_files(candidate_input_files)
-                fastq2 = None
-        
-            else:
-                raise Exception("Error: run type \"" + readset.run_type +
-                                "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!")
-        
-            left_fastqs[readset.sample.name].append(fastq1)
-            right_fastqs[readset.sample.name].append(fastq2)
-    
-        tmp_dir = config.param("DEFAULT", 'tmp_dir')
-    
-        for sample in self.samples:
-            output_dir = os.path.join(tmp_dir, "fusion", sample.name)
-        
-            star_fusion_dir = os.path.join("fusion", sample.name, "star_fusion")
-        
-            temp_dir = os.path.join(output_dir, "temp_fastq")
-        
-            final_dir = os.path.join("fusion", sample.name, "discasm_gmap")
-        
-            mkdir_job = Job(command="mkdir -p " + temp_dir + " " + output_dir + " " + final_dir)
-        
-            temp_left_fastq = os.path.join(temp_dir, sample.name + ".pair1.fastq.gz")
-            temp_right_fastq = os.path.join(temp_dir, sample.name + ".pair2.fastq.gz")
-        
-            if len(left_fastqs[sample.name]) > 1:
-            
-                job = concat_jobs([
-                    mkdir_job,
-                    Job(left_fastqs[sample.name], [temp_left_fastq],
-                        command="zcat " + " " + " ".join(left_fastqs[sample.name]) + " | gzip -cf > " + temp_left_fastq,
-                        removable_files=[temp_left_fastq]),
-                    Job(right_fastqs[sample.name], [temp_right_fastq],
-                        command="zcat " + " " + " ".join(
-                            right_fastqs[sample.name]) + " | gzip -cf > " + temp_right_fastq,
-                        removable_files=[temp_right_fastq]),
-                    discasm.run(temp_left_fastq, temp_right_fastq,
-                                os.path.join(star_fusion_dir, "Chimeric.out.junction"),
-                                os.path.join(star_fusion_dir, "std.STAR.bam"), output_dir),
-                    gmap_fusion.run(temp_left_fastq, temp_right_fastq,
-                                    os.path.join(output_dir, "trinity_out_dir", "Trinity.fasta"), final_dir),
-                ], name="run_discasm_gmap_fusion." + sample.name)
-        
-            else:
-                job = concat_jobs([
-                    mkdir_job,
-                    discasm.run(left_fastqs[sample.name], right_fastqs[sample.name],
-                                os.path.join(star_fusion_dir, "Chimeric.out.junction"),
-                                os.path.join(star_fusion_dir, "std.STAR.bam"), output_dir),
-                    gmap_fusion.run(left_fastqs[sample.name], right_fastqs[sample.name],
-                                    os.path.join(output_dir, "trinity_out_dir", "Trinity.fasta"), final_dir),
-                ], name="run_discasm_gmap_fusion." + sample.name)
-        
-            job.samples = [sample]
-            jobs.append(job)
-        
-            return jobs
-
     def run_annofuse(self):
         """
 
@@ -1573,90 +1407,6 @@ echo "Sample\tBamFile\tNote
             job.samples = [sample]
             jobs.append(job)
             
-        return jobs
-
-    def fusion_annotation(self):
-        """
-
-        """
-        jobs = []
-    
-        left_fastqs = collections.defaultdict(list)
-        right_fastqs = collections.defaultdict(list)
-    
-        for readset in self.readsets:
-            trim_file_prefix = os.path.join("trim", readset.sample.name, readset.name + "-trimmed-")
-        
-            if readset.run_type == "PAIRED_END":
-                candidate_input_files = [[trim_file_prefix + "pair1.fastq.gz", trim_file_prefix + "pair2.fastq.gz"]]
-                if readset.fastq1 and readset.fastq2:
-                    candidate_input_files.append([readset.fastq1, readset.fastq2])
-                if readset.bam:
-                    candidate_input_files.append([re.sub("\.bam$", ".pair1.fastq.gz", readset.bam),
-                                                  re.sub("\.bam$", ".pair2.fastq.gz", readset.bam)])
-                [fastq1, fastq2] = self.select_input_files(candidate_input_files)
-            elif readset.run_type == "SINGLE_END":
-                candidate_input_files = [[trim_file_prefix + "single.fastq.gz"]]
-                if readset.fastq1:
-                    candidate_input_files.append([readset.fastq1])
-                if readset.bam:
-                    candidate_input_files.append([re.sub("\.bam$", ".single.fastq.gz", readset.bam)])
-                [fastq1] = self.select_input_files(candidate_input_files)
-                fastq2 = None
-        
-            else:
-                raise Exception("Error: run type \"" + readset.run_type +
-                                "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!")
-        
-            left_fastqs[readset.sample.name].append(fastq1)
-            right_fastqs[readset.sample.name].append(fastq2)
-    
-        for sample in self.samples:
-            output_dir = os.path.join("fusion", sample.name)
-            star_fusion_dir = os.path.join(output_dir, "star_fusion")
-            star_seqr_dir = os.path.join(output_dir, "star_seqr_STAR-SEQR")
-            arriba_dir = os.path.join(output_dir, "arriba")
-            discasm_dir = os.path.join(output_dir, "discasm_gmap")
-        
-            annotation_dir = os.path.join(output_dir, "annotation")
-            metacaller_dir = os.path.join(annotation_dir, "metacaller")
-            two_caller_output = os.path.join(annotation_dir, sample.name + ".metacaller.2.tsv")
-        
-            job = concat_jobs([
-                Job(command="mkdir -p " + metacaller_dir),
-                Job([os.path.join(star_seqr_dir, "star_seqr_STAR-SEQR_candidates.txt")],
-                    [os.path.join(metacaller_dir, sample.name + ".star_seqr.tsv")],
-                    command="awk '$2+$3+$4 >=3 {print $1\"\\t\"$2+$3+$4}' " + os.path.join(star_seqr_dir,
-                                                                                           "star_seqr_STAR-SEQR_candidates.txt") + " | grep -v 'NAME' | sort -u -k1,1 > " +
-                            os.path.join(metacaller_dir, sample.name + ".star_seqr.tsv")),
-                Job([os.path.join(star_fusion_dir, "star-fusion.fusion_predictions.abridged.tsv")],
-                    [os.path.join(metacaller_dir, sample.name + ".star_fusion.tsv")],
-                    command="awk '$2+$3 >=3 {print $1\"\\t\"$2+$3}' " + os.path.join(star_fusion_dir,
-                                                                                     "star-fusion.fusion_predictions.abridged.tsv") + " | grep -v '^#' | sort -u -k1,1 > " +
-                            os.path.join(metacaller_dir, sample.name + ".star_fusion.tsv")),
-                Job([os.path.join(arriba_dir, "fusions.tsv")],
-                    [os.path.join(metacaller_dir, sample.name + ".arriba.tsv")],
-                    command="grep -v '^#' " + os.path.join(arriba_dir,
-                                                           "fusions.tsv") + " | grep -v 'low' | awk '$12+$13+$14 >=3 {print $1\"--\"$2\"\\t\"$12+$13+$14}' | sed -e 's#\,#-#g' | sed -e 's#([0-9]\+)##g' | sort -u -k1,1 > " +
-                            os.path.join(metacaller_dir, sample.name + ".arriba.tsv")),
-                Job([os.path.join(discasm_dir, "GMAP-fusion.fusion_predictions.tsv")],
-                    [os.path.join(metacaller_dir, sample.name + ".discasm.tsv")],
-                    command="awk '$2+$3 >=3 {print $1\"\\t\"$2+$3}' " + os.path.join(discasm_dir,
-                                                                                     "GMAP-fusion.fusion_predictions.tsv") + " | grep -v '^#' | sort -u -k1,1 > " +
-                            os.path.join(metacaller_dir, sample.name + ".discasm.tsv")),
-                # Job(command="cd " + metacaller_dir),
-                fusionmetacaller.run(metacaller_dir, annotation_dir, sample.name),
-                Job([two_caller_output],
-                    [os.path.join(annotation_dir, sample.name + ".fusions.tsv")],
-                    command="cut -f1 " + two_caller_output + " | grep -v \"sort\" | sort | uniq > " +
-                            os.path.join(annotation_dir, sample.name + ".fusions.tsv")),
-                fusioninspector.run(os.path.join(annotation_dir, sample.name + ".fusions.tsv"),
-                                    left_fastqs[sample.name], right_fastqs[sample.name], sample.name, annotation_dir)
-            ], name="fusion_annotation." + sample.name)
-        
-            job.samples = [sample]
-            jobs.append(job)
-    
         return jobs
 
     def estimate_ribosomal_rna(self):
@@ -1722,23 +1472,23 @@ echo "Sample\tBamFile\tNote
         """
         Generate wiggle tracks suitable for multiple browsers.
         """
-
+    
         jobs = []
-
+    
         ##check the library status
         library = {}
         for readset in self.readsets:
-            if not library.has_key(readset.sample) :
-                library[readset.sample]="PAIRED_END"
-            if readset.run_type == "SINGLE_END" :
-                library[readset.sample]="SINGLE_END"
-
+            if not readset.sample in library:
+                library[readset.sample] = "PAIRED_END"
+            if readset.run_type == "SINGLE_END":
+                library[readset.sample] = "SINGLE_END"
+    
         for sample in self.samples:
             bam_file_prefix = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.")
             input_bam = bam_file_prefix + "bam"
             bed_graph_prefix = os.path.join("tracks", sample.name, sample.name)
             big_wig_prefix = os.path.join("tracks", "bigWig", sample.name)
-
+        
             if (config.param('DEFAULT', 'strand_info') != 'fr-unstranded') and library[sample] == "PAIRED_END":
                 input_bam_f1 = bam_file_prefix + "tmp1.forward.bam"
                 input_bam_f2 = bam_file_prefix + "tmp2.forward.bam"
@@ -1746,7 +1496,7 @@ echo "Sample\tBamFile\tNote
                 input_bam_r2 = bam_file_prefix + "tmp2.reverse.bam"
                 output_bam_f = bam_file_prefix + "forward.bam"
                 output_bam_r = bam_file_prefix + "reverse.bam"
-
+            
                 bam_f_job = concat_jobs([
                     samtools.view(input_bam, input_bam_f1, "-bh -F 256 -f 81"),
                     samtools.view(input_bam, input_bam_f2, "-bh -F 256 -f 161"),
@@ -1757,9 +1507,10 @@ echo "Sample\tBamFile\tNote
                 # Remove temporary-then-deleted files from job output files, otherwise job is never up to date
                 bam_f_job.output_files.remove(input_bam_f1)
                 bam_f_job.output_files.remove(input_bam_f2)
-
+            
                 bam_r_job = concat_jobs([
-                    Job(command="mkdir -p " + os.path.join("tracks", sample.name) + " " + os.path.join("tracks", "bigWig")),
+                    Job(command="mkdir -p " + os.path.join("tracks", sample.name) + " " + os.path.join("tracks",
+                                                                                                       "bigWig")),
                     samtools.view(input_bam, input_bam_r1, "-bh -F 256 -f 97"),
                     samtools.view(input_bam, input_bam_r2, "-bh -F 256 -f 145"),
                     gatk4.merge_sam_files([input_bam_r1, input_bam_r2], output_bam_r),
@@ -1769,26 +1520,27 @@ echo "Sample\tBamFile\tNote
                 # Remove temporary-then-deleted files from job output files, otherwise job is never up to date
                 bam_r_job.output_files.remove(input_bam_r1)
                 bam_r_job.output_files.remove(input_bam_r2)
-
+            
                 jobs.extend([bam_f_job, bam_r_job])
-
+            
                 outputs = [
                     [bed_graph_prefix + ".forward.bedGraph", big_wig_prefix + ".forward.bw"],
                     [bed_graph_prefix + ".reverse.bedGraph", big_wig_prefix + ".reverse.bw"],
                 ]
             else:
                 outputs = [[bed_graph_prefix + ".bedGraph", big_wig_prefix + ".bw"]]
-
+        
             for bed_graph_output, big_wig_output in outputs:
                 if "forward" in bed_graph_output:
-                    in_bam = bam_file_prefix + "forward.bam"    # same as output_bam_f from previous picard job
+                    in_bam = bam_file_prefix + "forward.bam"  # same as output_bam_f from previous picard job
                 elif "reverse" in bed_graph_output:
-                    in_bam = bam_file_prefix + "reverse.bam"    # same as output_bam_r from previous picard job
+                    in_bam = bam_file_prefix + "reverse.bam"  # same as output_bam_r from previous picard job
                 else:
                     in_bam = input_bam
                 jobs.append(
                     concat_jobs([
-                        Job(command="mkdir -p " + os.path.join("tracks", sample.name) + " ", removable_files=["tracks"], samples=[sample]),
+                        Job(command="mkdir -p " + os.path.join("tracks", sample.name) + " ", removable_files=["tracks"],
+                            samples=[sample]),
                         bedtools.graph(in_bam, bed_graph_output, library[sample])
                     ], name="bed_graph." + re.sub(".bedGraph", "", os.path.basename(bed_graph_output)))
                 )
@@ -1798,7 +1550,7 @@ echo "Sample\tBamFile\tNote
                         ucsc.bedGraphToBigWig(bed_graph_output, big_wig_output, False)
                     ], name="wiggle." + re.sub(".bw", "", os.path.basename(big_wig_output)))
                 )
-
+    
         return jobs
 
     def raw_counts(self):
@@ -1848,7 +1600,8 @@ echo "Sample\tBamFile\tNote
         read_count_files = [os.path.join("raw_counts", sample.name + ".readcounts.csv") for sample in self.samples]
         output_matrix = os.path.join(output_directory, "rawCountMatrix.csv")
 
-        job = Job(read_count_files, [output_matrix], [['raw_counts_metrics', 'module_mugqic_tools']], name="metrics.matrix")
+        job = Job(read_count_files, [output_matrix], [['raw_counts_metrics', 'module_mugqic_tools']],
+                  name="metrics.matrix")
 
         job.command = """\
 mkdir -p {output_directory} && \\
@@ -1867,7 +1620,7 @@ do
 done && \\
 echo -e $HEAD | cat - {output_directory}/tmpMatrix.txt | tr ' ' '\\t' > {output_matrix} && \\
 rm {output_directory}/tmpSort.txt {output_directory}/tmpMatrix.txt""".format(
-            reference_gtf=config.param('raw_counts_metrics', 'gtf', type='filepath'),
+            reference_gtf=config.param('raw_counts_metrics', 'gtf', param_type='filepath'),
             output_directory=output_directory,
             read_count_files=" \\\n  ".join(read_count_files),
             output_matrix=output_matrix
@@ -1878,24 +1631,27 @@ rm {output_directory}/tmpSort.txt {output_directory}/tmpMatrix.txt""".format(
         # Create Wiggle tracks archive
         library = {}
         for readset in self.readsets:
-            if not library.has_key(readset.sample) :
-                library[readset.sample]="PAIRED_END"
-            if readset.run_type == "SINGLE_END" :
-                library[readset.sample]="SINGLE_END"
+            if not readset.sample in library:
+                library[readset.sample] = "PAIRED_END"
+            if readset.run_type == "SINGLE_END":
+                library[readset.sample] = "SINGLE_END"
 
         wiggle_directory = os.path.join("tracks", "bigWig")
         wiggle_archive = "tracks.zip"
-        if config.param('DEFAULT', 'strand_info') != 'fr-unstranded' :
+        if config.param('DEFAULT', 'strand_info') != 'fr-unstranded':
             wiggle_files = []
             for sample in self.samples:
-                wiggle_files.extend([os.path.join(wiggle_directory, sample.name) + ".forward.bw", os.path.join(wiggle_directory, sample.name) + ".reverse.bw"])
+                if library[sample] == "PAIRED_END":
+                    wiggle_files.extend([os.path.join(wiggle_directory, sample.name) + ".forward.bw",
+                                         os.path.join(wiggle_directory, sample.name) + ".reverse.bw"])
         else:
             wiggle_files = [os.path.join(wiggle_directory, sample.name + ".bw") for sample in self.samples]
-        jobs.append(Job(wiggle_files, [wiggle_archive], name="metrics.wigzip", command="zip -r " + wiggle_archive + " " + wiggle_directory, samples=self.samples))
+        jobs.append(Job(wiggle_files, [wiggle_archive], name="metrics.wigzip",
+                        command="zip -r " + wiggle_archive + " " + wiggle_directory, samples=self.samples))
 
         # RPKM and Saturation
         count_file = os.path.join("DGE", "rawCountMatrix.csv")
-        gene_size_file = config.param('rpkm_saturation', 'gene_size', type='filepath')
+        gene_size_file = config.param('rpkm_saturation', 'gene_size', param_type='filepath')
         rpkm_directory = "raw_counts"
         saturation_directory = os.path.join("metrics", "saturation")
 
@@ -1909,7 +1665,7 @@ rm {output_directory}/tmpSort.txt {output_directory}/tmpMatrix.txt""".format(
         report_file = os.path.join("report", "RnaSeq.raw_counts_metrics.md")
         jobs.append(
             Job(
-                [wiggle_archive, saturation_directory + ".zip","metrics/rnaseqRep/corrMatrixSpearman.txt"],
+                [wiggle_archive, saturation_directory + ".zip", "metrics/rnaseqRep/corrMatrixSpearman.txt"],
                 [report_file],
                 [['raw_counts_metrics', 'module_pandoc']],
                 command="""\
@@ -1930,12 +1686,12 @@ pandoc --to=markdown \\
                 ),
                 report_files=[report_file],
                 name="raw_count_metrics_report",
-                samples = self.samples
+                samples=self.samples
             )
         )
 
         return jobs
-    
+
     def stringtie(self):
         """
         Assemble transcriptome using [stringtie](https://ccb.jhu.edu/software/stringtie/index.shtml).
@@ -1949,7 +1705,11 @@ pandoc --to=markdown \\
             input_bam = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.hardClip.bam")
             output_directory = os.path.join("stringtie", sample.name)
 
-            job = stringtie.stringtie(input_bam, output_directory, gtf)
+            job = stringtie.stringtie(
+                input_bam,
+                output_directory,
+                gtf
+            )
             job.name = "stringtie." + sample.name
             job.samples = [sample]
             jobs.append(job)
@@ -1969,15 +1729,27 @@ pandoc --to=markdown \\
 
 
         job = concat_jobs([
-            Job(command="mkdir -p " + output_directory, samples=self.samples),
-            Job(input_gtfs, [sample_file], command="""\
+            Job(
+                command="mkdir -p " + output_directory,
+                samples=self.samples
+            ),
+            Job(
+                input_gtfs,
+                [sample_file],
+                command="""\
 `cat > {sample_file} << END
 {sample_rows}
 END
-
-`""".format(sample_rows="\n".join(input_gtfs), sample_file=sample_file)),
-            stringtie.stringtie_merge(sample_file, output_directory, gtf)],
-            name="stringtie-merge")
+`""".format(
+                    sample_rows="\n".join(input_gtfs),
+                    sample_file=sample_file)
+            ),
+            stringtie.stringtie_merge(
+                sample_file,
+                output_directory,
+                gtf)
+        ], name="stringtie-merge"
+        )
 
         return [job]
 
@@ -1994,7 +1766,12 @@ END
             input_bam = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.hardClip.bam")
             output_directory = os.path.join("stringtie", sample.name)
 
-            job = stringtie.stringtie(input_bam, output_directory, gtf, abund=True)
+            job = stringtie.stringtie(
+                input_bam,
+                output_directory,
+                gtf,
+                abund=True
+            )
             job.name = "stringtie_abund." + sample.name
             job.samples = [sample]
             jobs.append(job)
@@ -2017,7 +1794,11 @@ END
         output_directory = "ballgown" 
         input_abund = [os.path.join("stringtie", sample.name, "abundance.tab") for sample in self.samples]
 
-        ballgown_job = ballgown.ballgown(input_abund, design_file, output_directory)
+        ballgown_job = ballgown.ballgown(
+            input_abund,
+            design_file,
+            output_directory
+        )
         ballgown_job.name = "ballgown"
         ballgown_job.samples = self.samples
         jobs.append(ballgown_job)
@@ -2039,7 +1820,11 @@ END
             output_directory = os.path.join("cufflinks", sample.name)
 
             # De Novo FPKM
-            job = cufflinks.cufflinks(input_bam, output_directory, gtf)
+            job = cufflinks.cufflinks(
+                input_bam,
+                output_directory,
+                gtf
+            )
             job.removable_files = ["cufflinks"]
             job.name = "cufflinks."+sample.name
             job.samples = [sample]
@@ -2059,15 +1844,26 @@ END
 
 
         job = concat_jobs([
-            Job(command="mkdir -p " + output_directory, samples=self.samples),
-            Job(input_gtfs, [sample_file], command="""\
+            Job(
+                command="mkdir -p " + output_directory,
+                samples=self.samples
+            ),
+            Job(
+                input_gtfs,
+                [sample_file],
+                command="""\
 `cat > {sample_file} << END
 {sample_rows}
 END
-
-`""".format(sample_rows="\n".join(input_gtfs), sample_file=sample_file)),
-            cufflinks.cuffmerge(sample_file, output_directory, gtf_file=gtf)],
-            name="cuffmerge")
+`""".format(sample_rows="\n".join(input_gtfs),
+            sample_file=sample_file)
+            ),
+            cufflinks.cuffmerge(
+                sample_file,
+                output_directory,
+                gtf_file=gtf)
+        ], name="cuffmerge"
+        )
 
         return [job]
 
@@ -2086,7 +1882,11 @@ END
             output_directory = os.path.join("cufflinks", sample.name)
 
             #Quantification
-            job = cufflinks.cuffquant(input_bam, output_directory, gtf)
+            job = cufflinks.cuffquant(
+                input_bam,
+                output_directory,
+                gtf
+            )
             job.name = "cuffquant."+sample.name
             job.samples = [sample]
             jobs.append(job)
@@ -2165,7 +1965,10 @@ END
         job.samples = self.samples
         jobs = jobs + [job]
 
-        job = utils.utils.fpkm_correlation_matrix(cuffnorm_gene, output_gene)
+        job = utils.utils.fpkm_correlation_matrix(
+            cuffnorm_gene,
+            output_gene
+        )
         job.name="fpkm_correlation_matrix_gene"
         job.samples = self.samples
         jobs = jobs + [job]
