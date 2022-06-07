@@ -51,7 +51,7 @@ def run(fastqs1, fastqs2, output_dir):
         --right_fq {fastq2} \\
         --output_dir {output_dir}""".format(
             genome_build=config.param('run_star_fusion', 'genome_build'),
-            threads=config.param('run_star_fusion', 'threads', type='posint'),
+            threads=config.param('run_star_fusion', 'threads', param_type='posint'),
             options=config.param('run_star_fusion', 'options'),
             fastq1=",".join(fastq1 for fastq1 in fastqs1),
             fastq2=",".join(fastq2 for fastq2 in fastqs2),

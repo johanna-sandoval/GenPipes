@@ -54,7 +54,7 @@ $ARRIBA_HOME/./run_arriba.sh \\
             blacklist=config.param('run_arriba', 'blacklist'),
             known_fusions=config.param('run_arriba', 'known_fusions'),
             protein_domains=config.param('run_arriba', 'protein_domains'),
-            threads=config.param('run_arriba', 'threads', type='posint'),
+            threads=config.param('run_arriba', 'threads', param_type='posint'),
             options=config.param('run_arriba', 'options'),
             fastq1=",".join(fastq1 for fastq1 in fastqs1),
             fastq2=",".join(fastq2 for fastq2 in fastqs2),

@@ -62,6 +62,7 @@ from bfx import star
 from bfx import gatk
 from bfx import gatk4
 from bfx import sambamba
+from bfx import adapters
 from bfx import skewer
 from bfx import htslib
 from bfx import vt
@@ -69,13 +70,8 @@ from bfx import gemini
 from bfx import snpeff
 from bfx import vcfanno
 from bfx import star_fusion
-from bfx import star_seqr
 from bfx import arriba
 from bfx import annoFuse
-from bfx import discasm
-from bfx import gmap_fusion
-from bfx import fusionmetacaller
-from bfx import fusioninspector
 from bfx import rseqc
 
 from bfx import bash_cmd as bash
@@ -127,7 +123,7 @@ class RnaSeqRaw(common.Illumina):
     @property
     def sequence_dictionary(self):
         if not hasattr(self, "_sequence_dictionary"):
-            self._sequence_dictionary = parse_sequence_dictionary_file(config.param('DEFAULT', 'genome_dictionary', type='filepath'), variant=False)
+            self._sequence_dictionary = parse_sequence_dictionary_file(config.param('DEFAULT', 'genome_dictionary', param_type='filepath'), variant=False)
         return self._sequence_dictionary
 
     def build_adapter_file(self, directory, readset):
@@ -175,36 +171,83 @@ END
             output_dir = os.path.join("trim", readset.sample.name)
             trim_file_prefix = os.path.join(output_dir, readset.name)
 
-            adapter_file = config.param('skewer_trimming', 'adapter_file', required=False, type='filepath')
+            adapter_file = config.param('skewer_trimming', 'adapter_file', required=False, param_type='filepath')
             adapter_job = None
 
             if not adapter_file:
-                adapter_job = self.build_adapter_file(output_dir, readset)
                 adapter_file = os.path.join(output_dir, "adapter.tsv")
+                adapter_job = adapters.create(
+                    readset,
+                    adapter_file
+                )
 
+            fastq1 = ""
+            fastq2 = ""
             if readset.run_type == "PAIRED_END":
-                candidate_input_files = [[trim_file_prefix + ".pair1.fastq.gz", trim_file_prefix + ".pair2.fastq.gz"]]
-                if readset.fastq1 and readset.fastq2:
-                    candidate_input_files.append([readset.fastq1, readset.fastq2])
+                candidate_input_files = [[readset.fastq1, readset.fastq2]]
                 if readset.bam:
-                    candidate_input_files.append([re.sub("\.bam$", ".pair1.fastq.gz", readset.bam), re.sub("\.bam$", ".pair2.fastq.gz", readset.bam)])
+                    prefix = os.path.join(
+                        self.output_dir,
+                        "raw_reads",
+                        readset.sample.name,
+                        re.sub("\.bam$", ".", os.path.basename(readset.bam))
+                    )
+                    candidate_input_files.append([prefix + "pair1.fastq.gz", prefix + "pair2.fastq.gz"])
+                    prefix = os.path.join(
+                        self.output_dir,
+                        "raw_reads",
+                        readset.sample.name,
+                        readset.name + "."
+                    )
+                    candidate_input_files.append([prefix + "pair1.fastq.gz", prefix + "pair2.fastq.gz"])
                 [fastq1, fastq2] = self.select_input_files(candidate_input_files)
+
             elif readset.run_type == "SINGLE_END":
-                if readset.fastq1:
-                    candidate_input_files.append([readset.fastq1])
+                candidate_input_files = [[readset.fastq1]]
                 if readset.bam:
-                    candidate_input_files.append([re.sub("\.bam$", ".single.fastq.gz", readset.bam)])
+                    prefix = os.path.join(
+                        self.output_dir,
+                        "raw_reads",
+                        readset.sample.name,
+                        re.sub("\.bam$", ".", os.path.basename(readset.bam))
+                    )
+                    candidate_input_files.append([prefix + ".single.fastq.gz"])
                 [fastq1] = self.select_input_files(candidate_input_files)
                 fastq2 = None
-            else:
-                raise Exception("Error: run type \"" + readset.run_type +
-                "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!")
 
-            jobs.append(concat_jobs([
-                Job(command="mkdir -p " + output_dir),
-                adapter_job,
-                skewer.trim(fastq1, fastq2, trim_file_prefix, adapter_file)
-            ],name="skewer_trimming." + readset.name))
+            else:
+                _raise(SanitycheckError("Error: run type \"" + readset.run_type +
+                "\" is invalid for readset \"" + readset.name + "\" (should be PAIRED_END or SINGLE_END)!"))
+
+            jobs.append(
+                concat_jobs([
+                    bash.mkdir(
+                        output_dir,
+                        remove=True
+                    ),
+                    adapter_job,
+                    skewer.trim(
+                        fastq1,
+                        fastq2,
+                        trim_file_prefix,
+                        adapter_file
+                        ),
+                    bash.ln(
+                        trim_file_prefix + "-trimmed-pair1.fastq.gz",
+                        trim_file_prefix + ".trim.pair1.fastq.gz",
+                        self.output_dir
+                        ),
+                    bash.ln(
+                        trim_file_prefix + "-trimmed-pair2.fastq.gz",
+                        trim_file_prefix + ".trim.pair2.fastq.gz",
+                        self.output_dir
+                        )
+                    ],
+                    name="skewer_trimming." + readset.name,
+                    removable_files=[output_dir],
+                    samples=[readset.sample]
+                    )
+                )
 
         return jobs
 
@@ -478,7 +521,7 @@ pandoc --to=markdown \\
             output_dir = os.path.join(fastqc_directory)
             output = os.path.join(fastqc_directory, sample.name + ".sorted.mdup_fastqc.zip")
 
-            adapter_file = config.param('fastqc', 'adapter_file', required=False, type='filepath')
+            adapter_file = config.param('fastqc', 'adapter_file', required=False, param_type='filepath')
             adapter_job = None
 
             if not adapter_file:
@@ -509,7 +552,7 @@ pandoc --to=markdown \\
         """
 
         jobs = []
-        reference_file = config.param('picard_rna_metrics', 'genome_fasta', type='filepath')
+        reference_file = config.param('picard_rna_metrics', 'genome_fasta', param_type='filepath')
         for sample in self.samples:
             alignment_directory = os.path.join("alignment", sample.name)
             [input] = self.select_input_files([
@@ -546,7 +589,6 @@ pandoc --to=markdown \\
         """
     
         jobs = []
-        reference_file = config.param('picard_rna_metrics', 'genome_fasta', type='filepath')
         for sample in self.samples:
             alignment_directory = os.path.join("alignment", sample.name)
             [input] = self.select_input_files([
@@ -646,13 +688,126 @@ pandoc --to=markdown \\
         return jobs
 
     def rnaseqc(self):
+        """
+        Computes a series of quality control metrics using [RNA-SeQC](https://www.broadinstitute.org/cancer/cga/rna-seqc).
+        """
+
+        jobs = []
+        sample_file = os.path.join("alignment", "rnaseqc.samples.txt")
+        sample_rows = [
+            [sample.name, os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.bam"), "RNAseq"] for
+            sample in self.samples]
+        input_bams = [sample_row[1] for sample_row in sample_rows]
+        output_directory = os.path.join("metrics", "rnaseqRep")
+        # Use GTF with transcript_id only otherwise RNASeQC fails
+        gtf_transcript_id = config.param('rnaseqc', 'gtf_transcript_id', param_type='filepath')
+
+        jobs.append(concat_jobs([
+            Job(
+                command="mkdir -p " + output_directory,
+                removable_files=[output_directory],
+                samples=self.samples
+            ),
+            Job(
+                input_bams,
+                [sample_file],
+                command="""\
+echo "Sample\tBamFile\tNote
+{sample_rows}" \\
+  > {sample_file}""".format(
+                    sample_rows="\n".join(["\t".join(sample_row) for sample_row in sample_rows]),
+                    sample_file=sample_file)
+            ),
+            metrics.rnaseqc(
+                sample_file,
+                output_directory,
+                self.run_type == "SINGLE_END",
+                gtf_file=gtf_transcript_id,
+                reference=config.param(
+                    'rnaseqc',
+                    'genome_fasta',
+                    param_type='filepath'
+                ),
+                ribosomal_interval_file=config.param(
+                    'rnaseqc',
+                    'ribosomal_fasta',
+                    param_type='filepath')
+            ),
+            Job([],
+                [output_directory + ".zip"],
+                command="zip -r {output_directory}.zip {output_directory}".format(
+                output_directory=output_directory)
+                )
+        ], name="rnaseqc")
+        )
+
+        trim_metrics_file = os.path.join("metrics", "trimSampleTable.tsv")
+        metrics_file = os.path.join("metrics", "rnaseqRep", "metrics.tsv")
+        report_metrics_file = os.path.join("report", "trimAlignmentTable.tsv")
+        report_file = os.path.join("report", "RnaSeq.rnaseqc.md")
+        jobs.append(
+            Job(
+                [metrics_file],
+                [report_file, report_metrics_file],
+                [['rnaseqc', 'module_python'], ['rnaseqc', 'module_pandoc']],
+                # Ugly awk to merge sample metrics with trim metrics if they exist; knitr may do this better
+                command="""\
+mkdir -p report && \\
+cp {output_directory}.zip report/reportRNAseqQC.zip && \\
+python -c 'import csv; csv_in = csv.DictReader(open("{metrics_file}"), delimiter="\t")
+print "\t".join(["Sample", "Aligned Reads", "Alternative Alignments", "%", "rRNA Reads", "Coverage", "Exonic Rate", "Genes"])
+print "\\n".join(["\t".join([
+    line["Sample"],
+    line["Mapped"],
+    line["Alternative Aligments"],
+    str(float(line["Alternative Aligments"]) / float(line["Mapped"]) * 100),
+    line["rRNA"],
+    line["Mean Per Base Cov."],
+    line["Exonic Rate"],
+    line["Genes Detected"]
+]) for line in csv_in])' \\
+  > {report_metrics_file}.tmp && \\
+if [[ -f {trim_metrics_file} ]]
+then
+  awk -F"\t" 'FNR==NR{{raw_reads[$1]=$2; surviving_reads[$1]=$3; surviving_pct[$1]=$4; next}}{{OFS="\t"; if ($2=="Aligned Reads"){{surviving_pct[$1]="%"; aligned_pct="%"; rrna_pct="%"}} else {{aligned_pct=($2 / surviving_reads[$1] * 100); rrna_pct=($5 / surviving_reads[$1] * 100)}}; printf $1"\t"raw_reads[$1]"\t"surviving_reads[$1]"\t"surviving_pct[$1]"\t"$2"\t"aligned_pct"\t"$3"\t"$4"\t"$5"\t"rrna_pct; for (i = 6; i<= NF; i++) {{printf "\t"$i}}; print ""}}' \\
+  {trim_metrics_file} \\
+  {report_metrics_file}.tmp \\
+  > {report_metrics_file}
+else
+  cp {report_metrics_file}.tmp {report_metrics_file}
+fi && \\
+rm {report_metrics_file}.tmp && \\
+trim_alignment_table_md=`if [[ -f {trim_metrics_file} ]] ; then cut -f1-13 {report_metrics_file} | LC_NUMERIC=en_CA awk -F "\t" '{{OFS="|"; if (NR == 1) {{$1 = $1; print $0; print "-----|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:"}} else {{print $1, sprintf("%\\47d", $2), sprintf("%\\47d", $3), sprintf("%.1f", $4), sprintf("%\\47d", $5), sprintf("%.1f", $6), sprintf("%\\47d", $7), sprintf("%.1f", $8), sprintf("%\\47d", $9), sprintf("%.1f", $10), sprintf("%.2f", $11), sprintf("%.2f", $12), sprintf("%\\47d", $13)}}}}' ; else cat {report_metrics_file} | LC_NUMERIC=en_CA awk -F "\t" '{{OFS="|"; if (NR == 1) {{$1 = $1; print $0; print "-----|-----:|-----:|-----:|-----:|-----:|-----:|-----:"}} else {{print $1, sprintf("%\\47d", $2), sprintf("%\\47d", $3), sprintf("%.1f", $4), sprintf("%\\47d", $5), sprintf("%.2f", $6), sprintf("%.2f", $7), $8}}}}' ; fi`
+pandoc \\
+  {report_template_dir}/{basename_report_file} \\
+  --template {report_template_dir}/{basename_report_file} \\
+  --variable trim_alignment_table="$trim_alignment_table_md" \\
+  --to markdown \\
+  > {report_file}""".format(
+                    output_directory=output_directory,
+                    report_template_dir=self.report_template_dir,
+                    trim_metrics_file=trim_metrics_file,
+                    metrics_file=metrics_file,
+                    basename_report_file=os.path.basename(report_file),
+                    report_metrics_file=report_metrics_file,
+                    report_file=report_file
+                ),
+                report_files=[report_file],
+                name="rnaseqc_report",
+                samples=self.samples
+            )
+        )
+
+        return jobs
+
+    def rnaseqc2(self):
             """
             Computes a series of quality control metrics using [RNA-SeQC](https://www.broadinstitute.org/cancer/cga/rna-seqc).
             """
             jobs = []
 
             # Use GTF with transcript_id only otherwise RNASeQC fails
-            gtf_transcript_id = config.param('rnaseqc', 'gtf_transcript_id', type='filepath')
+            gtf_transcript_id = config.param('rnaseqc', 'gtf_transcript_id', param_type='filepath')
             for sample in self.samples:
                 alignment_file_prefix = os.path.join("alignment", sample.name, sample.name)
                 alignment_directory = os.path.join("alignment", sample.name)
@@ -689,12 +844,12 @@ echo "Sample\tBamFile\tNote
                                 reference=config.param(
                                     'rnaseqc',
                                     'genome_fasta',
-                                    type='filepath'
+                                    param_type='filepath'
                                 ),
                                 ribosomal_interval_file=config.param(
                                     'rnaseqc',
                                     'ribosomal_fasta',
-                                    type='filepath'
+                                    param_type='filepath'
                                 )
                                 ),
                 #Job(
@@ -714,7 +869,7 @@ echo "Sample\tBamFile\tNote
     
         jobs = []
     
-        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', type='posint')
+        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', param_type='posint')
         if nb_jobs > 50:
             log.warning(
                 "Number of haplotype jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
@@ -784,7 +939,7 @@ echo "Sample\tBamFile\tNote
     
         jobs = []
     
-        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', type='posint')
+        nb_jobs = config.param('gatk_split_N_trim', 'nb_jobs', param_type='posint')
         if nb_jobs > 50:
             log.warning(
                 "Number of haplotype jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
@@ -829,7 +984,7 @@ echo "Sample\tBamFile\tNote
         
         jobs = []
     
-        nb_jobs = config.param('gatk_indel_realigner', 'nb_jobs', type='posint')
+        nb_jobs = config.param('gatk_indel_realigner', 'nb_jobs', param_type='posint')
         if nb_jobs > 50:
             log.warning("Number of realign jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
     
@@ -949,7 +1104,7 @@ echo "Sample\tBamFile\tNote
     
         jobs = []
     
-        nb_jobs = config.param('gatk_indel_realigner', 'nb_jobs', type='posint')
+        nb_jobs = config.param('gatk_indel_realigner', 'nb_jobs', param_type='posint')
     
         for sample in self.samples:
             alignment_directory = os.path.join("alignment", sample.name)
@@ -1032,7 +1187,7 @@ echo "Sample\tBamFile\tNote
     
         jobs = []
     
-        nb_haplotype_jobs = config.param('gatk_haplotype_caller', 'nb_jobs', type='posint')
+        nb_haplotype_jobs = config.param('gatk_haplotype_caller', 'nb_jobs', param_type='posint')
         if nb_haplotype_jobs > 50:
             log.warning(
                 "Number of haplotype jobs is > 50. This is usually much. Anything beyond 20 can be problematic.")
@@ -1113,7 +1268,7 @@ echo "Sample\tBamFile\tNote
         """
     
         jobs = []
-        nb_haplotype_jobs = config.param('gatk_haplotype_caller', 'nb_jobs', type='posint')
+        nb_haplotype_jobs = config.param('gatk_haplotype_caller', 'nb_jobs', param_type='posint')
     
         for sample in self.samples:
             haplotype_file_prefix = os.path.join("alignment", sample.name, "rawHaplotypeCaller", sample.name)
@@ -1133,7 +1288,7 @@ echo "Sample\tBamFile\tNote
                     vcfs_to_merge,
                     output_haplotype_file_prefix + ".hc.vcf.gz"
                 ),
-            ], name="merge_hc_vcf." + sample.name)
+            ], name="gatk_merge_vcfs." + sample.name)
             job.samples = [sample]
             jobs.append(job)
     
@@ -1576,7 +1731,7 @@ echo "Sample\tBamFile\tNote
                         ),
                         htseq.htseq_count(
                         "-",
-                        config.param('htseq_count', 'gtf', type='filepath'),
+                        config.param('htseq_count', 'gtf', param_type='filepath'),
                         output_count,
                         config.param('htseq_count', 'options'),
                         stranded
@@ -1699,7 +1854,7 @@ pandoc --to=markdown \\
         """
         jobs = []
 
-        gtf = config.param('stringtie','gtf', type='filepath')
+        gtf = config.param('stringtie','gtf', param_type='filepath')
 
         for sample in self.samples:
             input_bam = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.hardClip.bam")
@@ -1725,7 +1880,7 @@ pandoc --to=markdown \\
         output_directory = os.path.join("stringtie", "AllSamples")
         sample_file = os.path.join("stringtie", "stringtie-merge.samples.txt")
         input_gtfs = [os.path.join("stringtie", sample.name, "transcripts.gtf") for sample in self.samples]
-        gtf = config.param('stringtie','gtf', type='filepath')
+        gtf = config.param('stringtie','gtf', param_type='filepath')
 
 
         job = concat_jobs([
@@ -1813,7 +1968,7 @@ END
 
         jobs = []
 
-        gtf = config.param('cufflinks','gtf', type='filepath')
+        gtf = config.param('cufflinks','gtf', param_type='filepath')
 
         for sample in self.samples:
             input_bam = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.hardClip.bam")
@@ -1840,7 +1995,7 @@ END
         output_directory = os.path.join("cufflinks", "AllSamples")
         sample_file = os.path.join("cufflinks", "cuffmerge.samples.txt")
         input_gtfs = [os.path.join("cufflinks", sample.name, "transcripts.gtf") for sample in self.samples]
-        gtf = config.param('cuffmerge','gtf', type='filepath')
+        gtf = config.param('cuffmerge','gtf', param_type='filepath')
 
 
         job = concat_jobs([
@@ -1993,7 +2148,7 @@ END
             gq_seq_utils.exploratory_analysis_rnaseq(
                 os.path.join("DGE", "rawCountMatrix.csv"),
                 "cuffnorm",
-                config.param('gq_seq_utils_exploratory_analysis_rnaseq', 'genes', type='filepath'),
+                config.param('gq_seq_utils_exploratory_analysis_rnaseq', 'genes', param_type='filepath'),
                 "exploratory"
             )
         ], name="gq_seq_utils_exploratory_analysis_rnaseq"))
@@ -2228,9 +2383,6 @@ done""".format(
                 self.rnaseqc,
                 self.gatk_callable_loci,
                 self.wiggle,
-                self.raw_counts,
-                self.raw_counts_metrics,
-                self.ihec_metrics,
                 self.cram_output
             ],
             [
@@ -2261,9 +2413,6 @@ done""".format(
                 self.rseqc,
                 self.gatk_callable_loci,
                 self.wiggle,
-                self.raw_counts,
-                self.raw_counts_metrics,
-                self.ihec_metrics,
                 self.cram_output
             ]
         ]

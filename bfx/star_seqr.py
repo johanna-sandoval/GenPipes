@@ -55,7 +55,7 @@ def run(fastqs1, fastqs2, output_dir):
             genome_build=config.param('run_star_seqr', 'genome_build'),
             gene_annot=config.param('run_star_seqr', 'gene_annot'),
             reference=config.param('run_star_seqr', 'reference'),
-            threads=config.param('run_star_seqr', 'threads', type='posint'),
+            threads=config.param('run_star_seqr', 'threads', param_type='posint'),
             options=config.param('run_star_seqr', 'options'),
             fastq1=",".join(fastq1 for fastq1 in fastqs1),
             fastq2=",".join(fastq2 for fastq2 in fastqs2),

@@ -266,7 +266,7 @@ def cat_variants(
         variants = [variants]
 
     if config.param('gatk_merge_vcfs', 'module_gatk').split("/")[2] < "4":
-        return picard2.mergeVcfs(
+        return gatk.cat_variants(
             variants,
             output
         )
