@@ -894,6 +894,16 @@ echo "Sample\tBamFile\tNote
                         alignment_file_prefix + "sorted.mdup.bam",
                         split_file_prefix + "sorted.mdup.split.bam"
                     ),
+                    Job(
+                        [split_file_prefix + "sorted.mdup.split.bam"],
+                        [alignment_file_prefix + "sorted.mdup.split.bam"],
+                        command="ln -s -f " +
+                                os.path.relpath(split_file_prefix + "sorted.mdup.split.bam",
+                                                os.path.dirname(
+                                                    alignment_file_prefix + "sorted.mdup.split.bam"
+                                                )
+                                                ) + " " + alignment_file_prefix + "sorted.mdup.split.bam"
+                    )
                 ], name="gatk_split_N_trim." + sample.name)
                 job.samples = [sample]
                 jobs.append(job)
@@ -1008,12 +1018,12 @@ echo "Sample\tBamFile\tNote
                         realign_directory,
                         remove=True
                     ),
-                    gatk.realigner_target_creator(
+                    gatk4.realigner_target_creator(
                         input,
                         realign_intervals,
                         output_dir=self.output_dir,
                     ),
-                    gatk.indel_realigner(
+                    gatk4.indel_realigner(
                         input,
                         output=output_bam,
                         target_intervals=realign_intervals,
