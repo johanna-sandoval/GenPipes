@@ -1238,7 +1238,7 @@ echo "Sample\tBamFile\tNote
                         gatk4.haplotype_caller(
                             input, os.path.join(
                                 haplotype_directory,
-                                sample.name + "." + str(idx) + ".hc.g.vcf.gz"
+                                sample.name + "." + str(idx) + ".hc.vcf.gz"
                             ),
                             intervals=sequences
                         )
@@ -1256,7 +1256,7 @@ echo "Sample\tBamFile\tNote
                     gatk4.haplotype_caller(
                         input,
                         os.path.join(haplotype_directory,
-                                     sample.name + ".others.hc.g.vcf.gz"
+                                     sample.name + ".others.hc.vcf.gz"
                                      ),
                         exclude_intervals=unique_sequences_per_job_others
                     )
