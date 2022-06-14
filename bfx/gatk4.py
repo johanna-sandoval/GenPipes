@@ -912,9 +912,11 @@ def variant_filtration(
     else:
         return Job(
             [
-                input,
+                input
             ],
-                output,
+                [
+                    output
+                ],
             [
                 ['gatk_variant_filtration', 'module_java'],
                 ['gatk_variant_filtration', 'module_gatk']
@@ -929,12 +931,12 @@ gatk --java-options "-Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram}" 
                 tmp_dir=config.param('gatk_variant_filtration', 'tmp_dir'),
                 java_other_options=config.param('gatk_variant_filtration', 'gatk4_java_options'),
                 ram=config.param('gatk_variant_filtration', 'ram'),
-                reference_sequence=config.param('gatk_variant_filtration', 'genome_fasta', type='filepath'),
+                reference_sequence=config.param('gatk_variant_filtration', 'genome_fasta', param_type='filepath'),
                 variants=input,
                 other_options=other_options,
                 output=output
         ))
-    
+
 #####################
 #  Copy Number Variant Discovery
 

@@ -606,8 +606,12 @@ pandoc --to=markdown \\
             jobs.append(
                 concat_jobs([
                     mkdir_job,
+                    bash.chgdir(
+                        output_directory
+                    ),
                     rseqc.tin(
                         input,
+                        output_directory
                     )
                 ],
                     name="rseqc.tin." + sample.name,
@@ -615,18 +619,18 @@ pandoc --to=markdown \\
                 )
             )
             
-            jobs.append(
-                concat_jobs([
-                    mkdir_job,
-                    rseqc.junction_saturation(
-                        input,
-                        os.path.join(output_directory, sample.name + ".junction_saturation")
-                    )
-                ],
-                    name="rseqc.junction_saturation." + sample.name,
-                    samples=[sample]
-                )
-            )
+#            jobs.append(
+#                concat_jobs([
+#                    mkdir_job,
+#                    rseqc.junction_saturation(
+#                        input,
+#                        os.path.join(output_directory, sample.name + ".junction_saturation")
+#                    )
+#                ],
+#                    name="rseqc.junction_saturation." + sample.name,
+#                    samples=[sample]
+#                )
+#            )
             
         return jobs
     
@@ -1234,7 +1238,7 @@ echo "Sample\tBamFile\tNote
                         gatk4.haplotype_caller(
                             input, os.path.join(
                                 haplotype_directory,
-                                sample.name + "." + str(idx) + ".hc.vcf.gz"
+                                sample.name + "." + str(idx) + ".hc.g.vcf.gz"
                             ),
                             intervals=sequences
                         )
@@ -1252,7 +1256,7 @@ echo "Sample\tBamFile\tNote
                     gatk4.haplotype_caller(
                         input,
                         os.path.join(haplotype_directory,
-                                     sample.name + ".others.hc.vcf.gz"
+                                     sample.name + ".others.hc.g.vcf.gz"
                                      ),
                         exclude_intervals=unique_sequences_per_job_others
                     )

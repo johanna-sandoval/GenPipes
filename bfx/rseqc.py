@@ -124,26 +124,31 @@ def junction_annotation(input, output):
     )
 
 def junction_saturation(input, output):
+    output_file=output + ".log"
+    
     return Job(
         [input],
-        [output],
+        [output_file],
         [
-            ['rseqc', 'module_rseqc']
+            ['rseqc', 'module_rseqc'],
+            ['rseqc', 'module_R']
         ],
 
         command="""\
         junction_saturation.py \\
             -r {ref_gene_model} \\
             -i {input} \\
-            -o {output}""".format(
+            -o {output} 2> \\
+            {output}.log""".format(
             ref_gene_model=config.param('rseqc', 'ref_gene_model'),
             input=input,
             output=output,
         ),
     )
 
-def tin(input):
-    output = re.sub("\.bam$", ".summary.txt", os.path.basename(input))
+def tin(input, output_dir):
+    file = re.sub("\.bam$", ".summary.txt", os.path.basename(input))
+    output = os.path.join(output_dir, file)
     return Job(
         [input],
         [output],
@@ -156,6 +161,6 @@ def tin(input):
             -r {ref_gene_model} \\
             -i {input}""".format(
             ref_gene_model=config.param('rseqc', 'ref_gene_model'),
-            input=input
+            input=os.path.abspath(input)
         ),
     )
