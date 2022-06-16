@@ -539,7 +539,12 @@ java -Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram} -jar $PICARD_HOME
         )
   )
 
-def collect_rna_metrics(input, output, annotation_flat=None,reference_sequence=None):
+def collect_rna_metrics(
+        input,
+        output,
+        annotation_flat=None,
+        reference_sequence=None
+):
 
     if config.param('picard_collect_rna_metrics', 'module_picard').split("/")[2] < "2":
         return picard.collect_rna_metrics(input, output, annotation_flat, reference_sequence)

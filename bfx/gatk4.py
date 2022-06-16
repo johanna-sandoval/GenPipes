@@ -1686,16 +1686,23 @@ def collect_rna_metrics(
     annotation_flat=None,
     reference_sequence=None
     ):
-
-    return Job(
-        [input],
-        # collect specific RNA metrics (exon rate, strand specificity, etc...)
-        [output],
-        [
-            ['picard_collect_rna_metrics', 'module_java'],
-            ['picard_collect_rna_metrics', 'module_gatk'],
-            ['picard_collect_rna_metrics', 'module_R']
-        ],
+    if config.param('picard_rna_metrics', 'module_gatk').split("/")[2] < "4":
+        return picard2.collect_rna_metrics(
+            input,
+            output,
+            annotation_flat=None,
+            reference_sequence=None
+        )
+    else:
+        return Job(
+            [input],
+            # collect specific RNA metrics (exon rate, strand specificity, etc...)
+            [output],
+            [
+                ['picard_collect_rna_metrics', 'module_java'],
+                ['picard_collect_rna_metrics', 'module_gatk'],
+                ['picard_collect_rna_metrics', 'module_R']
+            ],
             command="""\
 gatk --java-options "-Djava.io.tmpdir={tmp_dir} {java_other_options} -Xmx{ram}" \\
  CollectRnaSeqMetrics \\

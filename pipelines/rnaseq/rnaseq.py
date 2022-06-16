@@ -59,7 +59,6 @@ from bfx import ucsc
 from bfx import star
 
 #Variant tools
-from bfx import gatk
 from bfx import gatk4
 from bfx import sambamba
 from bfx import adapters
@@ -73,6 +72,7 @@ from bfx import star_fusion
 from bfx import arriba
 from bfx import annoFuse
 from bfx import rseqc
+from bfx import rnaseqc2
 
 from bfx import bash_cmd as bash
 
@@ -811,17 +811,13 @@ pandoc \\
             jobs = []
 
             # Use GTF with transcript_id only otherwise RNASeQC fails
-            gtf_transcript_id = config.param('rnaseqc', 'gtf_transcript_id', param_type='filepath')
             for sample in self.samples:
                 alignment_file_prefix = os.path.join("alignment", sample.name, sample.name)
-                alignment_directory = os.path.join("alignment", sample.name)
                 [input] = self.select_input_files([
-                    [os.path.join(alignment_file_prefix + ".sorted.mdup.split.realigned.recal.bam")],
                     [os.path.join(alignment_file_prefix + ".sorted.mdup.bam")]
                 ])
 
-                sample_file = os.path.join(alignment_directory, "rnaseqc.samples.txt")
-                output_directory = os.path.join("metrics", "rna", sample.name, "rnaseqc")
+                output_directory = os.path.join("metrics", "rna", sample.name, "rnaseqc2")
 
                 jobs.append(concat_jobs([
                     Job(
@@ -829,40 +825,11 @@ pandoc \\
                         removable_files=[output_directory],
                         samples=self.samples
                         ),
-                    Job(
-                        [input],
-                        [sample_file], command="""\
-echo "Sample\tBamFile\tNote
-{sample_name}\t{sample_rows}\tRNAseq" \\
-> {sample_file}""".format(
-                            sample_name=sample.name,
-                            sample_rows=input,
-                            sample_file=sample_file
-                        )
+                    rnaseqc2.run(
+                        input,
+                        output_directory,
                     ),
-                    
-                metrics.rnaseqc(sample_file,
-                                output_directory,
-                                self.run_type == "SINGLE_END",
-                                gtf_file=gtf_transcript_id,
-                                reference=config.param(
-                                    'rnaseqc',
-                                    'genome_fasta',
-                                    param_type='filepath'
-                                ),
-                                ribosomal_interval_file=config.param(
-                                    'rnaseqc',
-                                    'ribosomal_fasta',
-                                    param_type='filepath'
-                                )
-                                ),
-                #Job(
-                #    [],
-                #    [output_directory + ".zip"],
-                #    command="zip -r {output_directory}.zip {output_directory}".format(
-                #    output_directory=output_directory)
-                #    )
-            ], name="rnaseqc." + sample.name))
+            ], name="rnaseqc2." + sample.name))
     
             return jobs
 
@@ -2394,7 +2361,7 @@ done""".format(
                 self.gemini_annotations,
                 self.picard_rna_metrics,
                 self.estimate_ribosomal_rna,
-                self.rnaseqc,
+                self.rnaseqc2,
                 self.gatk_callable_loci,
                 self.wiggle,
                 self.cram_output
@@ -2423,7 +2390,7 @@ done""".format(
                 self.run_annofuse,
                 self.picard_rna_metrics,
                 self.estimate_ribosomal_rna,
-                self.rnaseqc,
+                self.rnaseqc2,
                 self.rseqc,
                 self.gatk_callable_loci,
                 self.wiggle,
