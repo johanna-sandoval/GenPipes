@@ -59,6 +59,7 @@ from bfx import ucsc
 from bfx import star
 
 #Variant tools
+from bfx import picard2
 from bfx import gatk4
 from bfx import sambamba
 from bfx import adapters
@@ -1585,7 +1586,7 @@ pandoc \\
                         ref=config.param('bwa_mem_rRNA', 'ribosomal_fasta'),
                         ini_section='bwa_mem_rRNA'
                     ),
-                    gatk4.sort_sam(
+                    picard2.sort_sam(
                         "/dev/stdin",
                         readset_metrics_bam,
                         "coordinate",
