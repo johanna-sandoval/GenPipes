@@ -1200,8 +1200,11 @@ pandoc \\
         
         
             else:
-                unique_sequences_per_job, unique_sequences_per_job_others = split_by_size(self.sequence_dictionary,
-                                                                                          nb_haplotype_jobs - 1)
+                unique_sequences_per_job, unique_sequences_per_job_others = split_by_size(
+                    self.sequence_dictionary,
+                    nb_haplotype_jobs - 1,
+                    variant=True
+                )
             
                 job = []
             
