@@ -1945,176 +1945,6 @@ END
 
         return jobs
 
-    def cufflinks(self):
-        """
-        Compute RNA-Seq data expression using [cufflinks](http://cole-trapnell-lab.github.io/cufflinks/cufflinks/).
-        Warning: It needs to use a hard clipped bam file while Tuxedo tools do not support official soft clip SAM format
-        """
-
-        jobs = []
-
-        gtf = config.param('cufflinks','gtf', param_type='filepath')
-
-        for sample in self.samples:
-            input_bam = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.hardClip.bam")
-            output_directory = os.path.join("cufflinks", sample.name)
-
-            # De Novo FPKM
-            job = cufflinks.cufflinks(
-                input_bam,
-                output_directory,
-                gtf
-            )
-            job.removable_files = ["cufflinks"]
-            job.name = "cufflinks."+sample.name
-            job.samples = [sample]
-            jobs.append(job)
-
-        return jobs
-
-    def cuffmerge(self):
-        """
-        Merge assemblies into a master transcriptome reference using [cuffmerge](http://cole-trapnell-lab.github.io/cufflinks/cuffmerge/).
-        """
-
-        output_directory = os.path.join("cufflinks", "AllSamples")
-        sample_file = os.path.join("cufflinks", "cuffmerge.samples.txt")
-        input_gtfs = [os.path.join("cufflinks", sample.name, "transcripts.gtf") for sample in self.samples]
-        gtf = config.param('cuffmerge','gtf', param_type='filepath')
-
-
-        job = concat_jobs([
-            Job(
-                command="mkdir -p " + output_directory,
-                samples=self.samples
-            ),
-            Job(
-                input_gtfs,
-                [sample_file],
-                command="""\
-`cat > {sample_file} << END
-{sample_rows}
-END
-`""".format(sample_rows="\n".join(input_gtfs),
-            sample_file=sample_file)
-            ),
-            cufflinks.cuffmerge(
-                sample_file,
-                output_directory,
-                gtf_file=gtf)
-        ], name="cuffmerge"
-        )
-
-        return [job]
-
-    def cuffquant(self):
-        """
-        Compute expression profiles (abundances.cxb) using [cuffquant](http://cole-trapnell-lab.github.io/cufflinks/cuffquant/).
-        Warning: It needs to use a hard clipped bam file while Tuxedo tools do not support official soft clip SAM format
-        """
-
-        jobs = []
-
-        gtf = os.path.join("cufflinks", "AllSamples","merged.gtf")
-
-        for sample in self.samples:
-            input_bam = os.path.join("alignment", sample.name, sample.name + ".sorted.mdup.hardClip.bam")
-            output_directory = os.path.join("cufflinks", sample.name)
-
-            #Quantification
-            job = cufflinks.cuffquant(
-                input_bam,
-                output_directory,
-                gtf
-            )
-            job.name = "cuffquant."+sample.name
-            job.samples = [sample]
-            jobs.append(job)
-
-        return jobs
-
-    def cuffdiff(self):
-        """
-        [Cuffdiff](http://cole-trapnell-lab.github.io/cufflinks/cuffdiff/) is used to calculate differential transcript expression levels and test them for significant differences.
-        """
-
-        jobs = []
-
-        fpkm_directory = "cufflinks"
-        gtf = os.path.join(fpkm_directory, "AllSamples","merged.gtf")
-
-
-        # Perform cuffdiff on each design contrast
-        for contrast in self.contrasts:
-            job = cufflinks.cuffdiff(
-                # Cuffdiff input is a list of lists of replicate bams per control and per treatment
-                [[os.path.join(fpkm_directory, sample.name, "abundances.cxb") for sample in group] for group in [contrast.controls, contrast.treatments]],
-                gtf,
-                os.path.join("cuffdiff", contrast.name)
-            )
-            for group in contrast.controls, contrast.treatments:
-                job.samples = [sample for sample in group]
-            job.removable_files = ["cuffdiff"]
-            job.name = "cuffdiff." + contrast.name
-            jobs.append(job)
-
-        return jobs
-
-    def cuffnorm(self):
-        """
-        Global normalization of RNA-Seq expression levels using [Cuffnorm](http://cole-trapnell-lab.github.io/cufflinks/cuffnorm/).
-        """
-
-        jobs = []
-
-        fpkm_directory = "cufflinks"
-        gtf = os.path.join(fpkm_directory, "AllSamples","merged.gtf")
-        sample_labels = ",".join([sample.name for sample in self.samples])
-
-        # Perform cuffnorm using every samples
-        job = cufflinks.cuffnorm(
-            [os.path.join(fpkm_directory, sample.name, "abundances.cxb") for sample in self.samples],
-            gtf,
-            "cuffnorm",
-            sample_labels
-        )
-        job.removable_files = ["cuffnorm"]
-        job.name = "cuffnorm"
-        job.samples = self.samples
-        jobs.append(job)
-
-        return jobs
-
-    def fpkm_correlation_matrix(self):
-        """
-        Compute the pearson corrleation matrix of gene and transcripts FPKM. FPKM data are those estimated by cuffnorm.
-        """
-        output_directory = "metrics"
-        output_transcript = os.path.join(output_directory,"transcripts_fpkm_correlation_matrix.tsv")
-        cuffnorm_transcript = os.path.join("cuffnorm","isoforms.fpkm_table")
-        output_gene = os.path.join(output_directory,"gene_fpkm_correlation_matrix.tsv")
-        cuffnorm_gene = os.path.join("cuffnorm","genes.fpkm_table")
-
-        jobs = []
-
-        job = concat_jobs([
-            Job(command="mkdir -p " + output_directory),
-            utils.utils.fpkm_correlation_matrix(cuffnorm_transcript, output_transcript)
-        ])
-        job.name="fpkm_correlation_matrix_transcript"
-        job.samples = self.samples
-        jobs = jobs + [job]
-
-        job = utils.utils.fpkm_correlation_matrix(
-            cuffnorm_gene,
-            output_gene
-        )
-        job.name="fpkm_correlation_matrix_gene"
-        job.samples = self.samples
-        jobs = jobs + [job]
-
-        return jobs
-
     def gq_seq_utils_exploratory_analysis_rnaseq(self):
         """
         Exploratory analysis using the gqSeqUtils R package.
@@ -2320,33 +2150,6 @@ done""".format(
             ],
             [
                 self.picard_sam_to_fastq,
-                self.trimmomatic,
-                self.merge_trimmomatic_stats,
-                self.star,
-                self.picard_merge_sam_files,
-                self.picard_sort_sam,
-                self.picard_mark_duplicates,
-                self.picard_rna_metrics,
-                self.estimate_ribosomal_rna,
-                self.bam_hard_clip,
-                self.rnaseqc,
-                self.wiggle,
-                self.raw_counts,
-                self.raw_counts_metrics,
-                self.cufflinks,
-                self.cuffmerge,
-                self.cuffquant,
-                self.cuffdiff,
-                self.cuffnorm,
-                self.fpkm_correlation_matrix,
-                self.gq_seq_utils_exploratory_analysis_rnaseq,
-                self.differential_expression,
-                self.differential_expression_goseq,
-                self.ihec_metrics,
-                self.cram_output
-            ],
-            [
-                self.picard_sam_to_fastq,
                 self.skewer_trimming,
                 self.star,
                 self.picard_merge_sam_files,
@@ -2405,7 +2208,7 @@ class RnaSeq(RnaSeqRaw):
     def __init__(self, protocol=None):
         self._protocol = protocol
         # Add pipeline specific arguments
-        self.argparser.add_argument("-t", "--type", help="RNAseq analysis type", choices=["stringtie","cufflinks","variants","cancer"], default="stringtie")
+        self.argparser.add_argument("-t", "--type", help="RNAseq analysis type", choices=["stringtie","variants","cancer"], default="stringtie")
         super(RnaSeq, self).__init__(protocol)
 
 if __name__ == '__main__':
@@ -2413,4 +2216,4 @@ if __name__ == '__main__':
     if '--wrap' in argv:
         utils.utils.container_wrapper_argparse(argv)
     else:
-        RnaSeq(protocol=['stringtie','cufflinks','variants', 'cancer'])
+        RnaSeq(protocol=['stringtie','variants', 'cancer'])
