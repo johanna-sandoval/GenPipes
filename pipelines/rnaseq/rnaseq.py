@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 ################################################################################
-# Copyright (C) 2014, 2015 GenAP, McGill University and Genome Quebec Innovation Centre
+# Copyright (C) 2014, 2022 GenAP, McGill University and Genome Quebec Innovation Centre
 #
 # This file is part of MUGQIC Pipelines.
 #
@@ -84,16 +84,18 @@ class RnaSeqRaw(common.Illumina):
     RNA-Seq Pipeline
     ================
 
-    The standard MUGQIC RNA-Seq pipeline is based on the use of the [STAR aligner](https://code.google.com/p/rna-star/)
+    The standard MUGQIC RNA-Seq pipeline now has three protocols (stringtie, variants, cancer).
+
+    All three protocols are based on the use of the [STAR aligner](https://code.google.com/p/rna-star/)
     to align reads to the reference genome. These alignments are used during
     downstream analysis to determine genes and transcripts differential expression. The
-    [Cufflinks](http://cufflinks.cbcb.umd.edu/) suite is used for the transcript analysis whereas
-    [DESeq](http://bioconductor.org/packages/release/bioc/html/DESeq.html) and
+    [StringTie](https://ccb.jhu.edu/software/stringtie/) suite is used for the transcript analysis whereas
+    [DESeq2](https://bioconductor.org/packages/release/bioc/html/DESeq2.html) and
     [edgeR](http://bioconductor.org/packages/release/bioc/html/edgeR.html) are used for the gene analysis.
 
-    The RNAseq pipeline requires to provide a design file which will be used to define group comparison
+    The "stringtie" protocol requires to provide a design file which will be used to define group comparison
     in the differential analyses. The design file format is described
-    [here](https://bitbucket.org/mugqic/mugqic_pipelines/src#markdown-header-design-file)
+    [here](https://genpipes.readthedocs.io/en/latest/get-started/concepts/design_file.html)
 
     The differential gene analysis is followed by a Gene Ontology (GO) enrichment analysis.
     This analysis use the [goseq approach](http://bioconductor.org/packages/release/bioc/html/goseq.html).
@@ -108,11 +110,6 @@ class RnaSeqRaw(common.Illumina):
     of the software tools and methods used during the analysis, together with the full list of parameters
     that have been passed to the pipeline main script.
 
-    An example of the RNA-Seq report for an analysis on Public Corriel CEPH B-cell is available for illustration
-    purpose only: [RNA-Seq report](http://gqinnovationcenter.com/services/bioinformatics/tools/rnaReport/index.html).
-
-    [Here](https://bitbucket.org/mugqic/mugqic_pipelines/downloads/MUGQIC_Bioinfo_RNA-Seq.pptx) is more
-    information about the RNA-Seq pipeline that you may find interesting.
     """
 
     def __init__(self, protocol=None):
@@ -483,7 +480,7 @@ pandoc --to=markdown \\
         """
         Mark duplicates. Aligned reads per sample are duplicates if they have the same 5' alignment positions
         (for both mates in the case of paired-end reads). All but the best pair (based on alignment score)
-        ill be marked as a duplicate in the BAM file. Marking duplicates is done using [Picard](http://broadinstitute.github.io/picard/).
+        Will be marked as a duplicate in the BAM file. Marking duplicates is done using [Picard](http://broadinstitute.github.io/picard/).
         """
 
         jobs = []
@@ -1556,14 +1553,12 @@ pandoc \\
         The alignment software used is [BWA](http://bio-bwa.sourceforge.net/) with algorithm: bwa mem.
         BWA output BAM files are then sorted by coordinate using [Picard](http://broadinstitute.github.io/picard/).
 
-        This step takes as input files:
-
-        readset Bam files
+        This step takes as input files: readset Bam files
         """
     
         jobs = []
         for readset in self.readsets:
-            readset_bam = os.path.join("alignment", readset.sample.name, readset.name, "Aligned.sortedByCoord.out.bam")
+            readset_bam = os.path.join("alignment", readset.sample.name, readset.name , "Aligned.sortedByCoord.out.bam")
             output_folder = os.path.join("metrics", readset.sample.name, readset.name)
             readset_metrics_bam = os.path.join(output_folder, readset.name + "rRNA.bam")
         
