@@ -43,7 +43,6 @@ Rscript $R_TOOLS/DNAsampleMetrics.R \\
         )
     )
 
-#, os.path.join(output_directory, "corrMatrixSpearman.txt")
 def rnaseqc(
         sample_file,
         output_directory,
