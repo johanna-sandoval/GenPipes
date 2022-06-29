@@ -1562,7 +1562,7 @@ pandoc \\
         The alignment software used is [BWA](http://bio-bwa.sourceforge.net/) with algorithm: bwa mem.
         BWA output BAM files are then sorted by coordinate using [Picard](http://broadinstitute.github.io/picard/).
 
-        This step takes as input files: readset Bam files
+        This step takes as input files: readset Bam files.
         """
     
         jobs = []
@@ -1581,15 +1581,15 @@ pandoc \\
                         "/dev/stdin",
                         None,
                         read_group="'@RG" + \
-                                   "\tID:" + readset.name + \
-                                   "\tSM:" + readset.sample.name + \
-                                   ("\tLB:" + readset.library if readset.library else "") + \
-                                   (
-                                       "\tPU:run" + readset.run + "_" + readset.lane if readset.run and readset.lane else "") + \
-                                   ("\tCN:" + config.param('bwa_mem_rRNA', 'sequencing_center') if config.param(
-                                       'bwa_mem_rRNA', 'sequencing_center', required=False) else "") + \
-                                   "\tPL:Illumina" + \
-                                   "'",
+                           "\tID:" + readset.name + \
+                           "\tSM:" + readset.sample.name + \
+                           ("\tLB:" + readset.library if readset.library else "") + \
+                           (
+                               "\tPU:run" + readset.run + "_" + readset.lane if readset.run and readset.lane else "") + \
+                           ("\tCN:" + config.param('bwa_mem_rRNA', 'sequencing_center') if config.param(
+                               'bwa_mem_rRNA', 'sequencing_center', required=False) else "") + \
+                           "\tPL:Illumina" + \
+                           "'",
                         ref=config.param('bwa_mem_rRNA', 'ribosomal_fasta'),
                         ini_section='bwa_mem_rRNA'
                     ),
@@ -1839,7 +1839,6 @@ pandoc --to=markdown \\
     def stringtie(self):
         """
         Assemble transcriptome using [stringtie](https://ccb.jhu.edu/software/stringtie/index.shtml).
-        Warning: Still in testing.
         """
         jobs = []
 
@@ -1863,7 +1862,6 @@ pandoc --to=markdown \\
     def stringtie_merge(self): 
         """
         Merge assemblies into a master teranscriptome reference using [stringtie](https://ccb.jhu.edu/software/stringtie/index.shtml).
-        Warning: still in testing
         """
 
         output_directory = os.path.join("stringtie", "AllSamples")
@@ -1900,7 +1898,6 @@ END
     def stringtie_abund(self):
         """
         Assemble transcriptome and compute RNA-seq expression using [stringtie](https://ccb.jhu.edu/software/stringtie/index.shtml).
-        Warning: Still in testing.
         """
         jobs = []
 

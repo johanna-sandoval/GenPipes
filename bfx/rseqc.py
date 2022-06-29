@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 ################################################################################
-# Copyright (C) 2014, 2015 GenAP, McGill University and Genome Quebec Innovation Centre
+# Copyright (C) 2014, 2022 GenAP, McGill University and Genome Quebec Innovation Centre
 #
 # This file is part of MUGQIC Pipelines.
 #
@@ -47,9 +47,9 @@ def bam_stat(input, output):
         ),
     )
 
-def gene_body_coverage(input, output):
+def gene_body_coverage(input_bam, output):
     return Job(
-        [input],
+        [input_bam],
         [output],
         [
             ['rseqc', 'module_rseqc']
@@ -61,7 +61,7 @@ def gene_body_coverage(input, output):
             -i {input} \\
             -o {output}""".format(
             geneBody=config.param('rseqc', 'housekeeping'),
-            input=input,
+            input=input_bam,
             output=output,
         ),
     )
