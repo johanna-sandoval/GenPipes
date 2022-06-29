@@ -99,8 +99,7 @@ class RnaSeqRaw(common.Illumina):
     in the differential analyses. The design file format is described
     [here](https://genpipes.readthedocs.io/en/latest/get-started/concepts/design_file.html). In addition,
     [Ballgown](https://bioconductor.org/packages/release/bioc/html/ballgown.html) is used to calculate differential
-    transcript and gene expression levels and test them for significant differences. However, please note that this step
-    is still experimenting and can be changed in the future.
+    transcript and gene expression levels and test them for significant differences.
 
     The variants protocol is used when variant detection, is the main goal of the analysis. GATK best practices workflow
     is used for variant calling. It also contains a step for annotating genes using [gemini](https://gemini.readthedocs.io/en/latest/)
@@ -166,6 +165,9 @@ END
 
     def skewer_trimming(self):
         """
+        [Skewer](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-15-182) is used mainly for
+        detection and trimming adapter sequences from raw fastq files. Other features of Skewer is listed
+        [here](https://github.com/relipmoc/skewer).
         """
 
         jobs = []
@@ -621,19 +623,6 @@ pandoc --to=markdown \\
                     samples=[sample]
                 )
             )
-            
-#            jobs.append(
-#                concat_jobs([
-#                    mkdir_job,
-#                    rseqc.junction_saturation(
-#                        input,
-#                        os.path.join(output_directory, sample.name + ".junction_saturation")
-#                    )
-#                ],
-#                    name="rseqc.junction_saturation." + sample.name,
-#                    samples=[sample]
-#                )
-#            )
             
         return jobs
     
@@ -1283,7 +1272,8 @@ pandoc \\
 
     def run_vcfanno(self):
         """
-
+        vcfanno is used to annotate VCF files with preferred INFO fields from anu number of VCF or BED files. For more
+        information [visit](https://github.com/brentp/vcfanno)
         """
         
         jobs = []
@@ -1334,7 +1324,10 @@ pandoc \\
 
     def decompose_and_normalize(self):
         """
-
+        [vt](https://genome.sph.umich.edu/wiki/Vt#Normalization) is used to normalized and decompose VCF files. For more
+        information about normalizing and decomposing visit
+        [here](https://research-help.genomicsengland.co.uk/display/GERE/Variant+Normalisation). An indexed file is also
+        generated from the output file using [htslib](http://www.htslib.org/download/).
         """
     
         jobs = []
@@ -1359,7 +1352,9 @@ pandoc \\
 
     def compute_snp_effects(self):
         """
-
+        [SnpEff](https://pcingola.github.io/SnpEff/) is used to variant annotation and effect prediction on genes by
+        using an interval forest approach. It annotates and predicts the effects of genetic variants
+        (such as amino acid changes).
         """
         jobs = []
     
@@ -1384,7 +1379,9 @@ pandoc \\
 
     def gemini_annotations(self):
         """
-
+        [gemini](https://github.com/arq5x/gemini) (GEnome MINIng) is used to integrative exploration of genetic
+        variation and genome annotations. For more information
+        [visit](https://gemini.readthedocs.io/en/latest/).
         """
     
         jobs = []
@@ -1409,7 +1406,8 @@ pandoc \\
 
     def run_star_fusion(self):
         """
-        STAR-Fusion is a component of the Trinity Cancer Transcriptome Analysis Toolkit (CTAT). Based on the STAR aligner it identifies candidate fusion transcripts supported by Illumina reads.
+        STAR-Fusion is a component of the Trinity Cancer Transcriptome Analysis Toolkit (CTAT). Based on the STAR
+        aligner it identifies candidate fusion transcripts supported by Illumina reads.
         https://github.com/STAR-Fusion/STAR-Fusion/wiki
         """
     
@@ -1465,6 +1463,10 @@ pandoc \\
 
     def run_arriba(self):
         """
+        [arriba](https://github.com/suhrig/arriba) is used for the detection of gene fusions from RNA-Seq data.
+        arriba is based on the [STAR](https://github.com/alexdobin/STAR) aligner. Apart from gene fusions,
+        Arriba can detect other structural rearrangements with potential clinical relevance, including viral integration
+        sites, internal tandem duplications, whole exon duplications and intragenic inversions etc...
         """
     
         jobs = []
@@ -1523,7 +1525,9 @@ pandoc \\
 
     def run_annofuse(self):
         """
-
+        [annofuse](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-020-03922-7)
+        is a R package and it is used to annotate, prioritize, and interactively explore putative oncogenic
+        RNA fusions.
         """
         jobs = []
 
@@ -1920,9 +1924,8 @@ END
 
     def ballgown(self):
         """
-        [Ballgown](https://bioconductor.org/packages/release/bioc/html/ballgown.html) is used to calculate differential transcript and gene expression levels and test them for significant differences.
-
-        Warning: still in testing
+        [Ballgown](https://bioconductor.org/packages/release/bioc/html/ballgown.html) is used to calculate differential
+        transcript and gene expression levels and test them for significant differences.
         """
 
         jobs = []
