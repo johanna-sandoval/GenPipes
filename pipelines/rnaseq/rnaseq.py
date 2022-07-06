@@ -397,6 +397,7 @@ END
             if len(readset.sample.readsets) == 1:
                 readset_bam = os.path.join(alignment_2ndPass_directory, "Aligned.sortedByCoord.out.bam")
                 sample_bam = os.path.join("alignment", readset.sample.name, readset.sample.name + ".sorted.bam")
+
                 job = concat_jobs([
                     job,
                     Job(
